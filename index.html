@@ -1,0 +1,2762 @@
+<!DOCTYPE html>
+<html lang="es" class="h-full bg-slate-900 text-slate-100">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Filtración Tempus (Ramón)- Gestor de Notas y Trabajo</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- FontAwesome Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- PDF.js (visor de PDF dentro del programa) -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>if (window.pdfjsLib) pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';</script>
+    <!-- Google Fonts Inter -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: {
+                            50: '#f0f9ff',
+                            100: '#e0f2fe',
+                            500: '#0ea5e9',
+                            600: '#0284c7',
+                            700: '#0369a1',
+                            900: '#0c4a6e',
+                        }
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                    }
+                }
+            }
+        }
+    </script>
+
+    <style>
+        /* Personalización de scrollbar y comportamiento touch */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(51, 65, 85, 0.8);
+            border-radius: 9999px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: rgba(100, 116, 139, 1);
+        }
+        .touch-action-manipulation {
+            touch-action: manipulation;
+        }
+        /* Para evitar zoom indeseado en iOS en inputs */
+        @media screen and (max-width: 768px) {
+            input, select, textarea {
+                font-size: 16px !important;
+            }
+        }
+    </style>
+</head>
+<body class="h-full flex flex-col font-sans overflow-hidden select-none bg-slate-950 text-slate-100">
+
+    <!-- APP HEADER -->
+    <header class="bg-slate-900 border-b border-slate-800 px-4 py-3 flex items-center justify-between shrink-0 z-20">
+        <div class="flex items-center space-x-3">
+            <button id="toggleSidebarBtn" class="md:hidden text-slate-400 hover:text-white p-2 rounded-lg bg-slate-800/60">
+                <i class="fa-solid fa-bars text-lg"></i>
+            </button>
+            <div class="flex items-center space-x-2">
+                <div class="w-9 h-9 rounded-xl bg-gradient-to-tr from-brand-600 to-indigo-500 flex items-center justify-center shadow-lg shadow-brand-500/20">
+                    <i class="fa-solid fa-folder-tree text-white text-base"></i>
+                </div>
+                <div>
+                    <h1 class="font-bold text-base leading-none text-slate-100">WorkNotes <span class="text-brand-500 text-xs px-1.5 py-0.5 rounded bg-brand-500/10 border border-brand-500/20">PRO</span></h1>
+                    <span id="syncStatusBadge" onclick="openSyncModal()" class="cursor-pointer text-[10px] text-slate-400 flex items-center gap-1 mt-0.5">
+                        <i class="fa-solid fa-cloud text-[9px]"></i> Sincronizado
+                    </span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Acciones rápidas en header -->
+        <div class="flex items-center space-x-2">
+            <button onclick="openSyncModal()" class="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg text-sm flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-rotate text-brand-500"></i>
+                <span class="hidden sm:inline text-xs font-medium">Nube</span>
+            </button>
+            <button onclick="openSettingsModal()" class="p-2 text-slate-300 hover:text-white hover:bg-slate-800 rounded-lg text-sm flex items-center gap-1.5 transition">
+                <i class="fa-solid fa-floppy-disk text-indigo-400"></i>
+                <span class="hidden sm:inline text-xs font-medium">Copia de Seguridad</span>
+            </button>
+        </div>
+    </header>
+
+    <!-- MAIN WORKSPACE -->
+    <div class="flex-1 flex overflow-hidden relative">
+
+        <!-- OVERLAY PARA MÓVIL CUANDO SIDEBAR ESTÁ ABIERTA -->
+        <div id="sidebarOverlay" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-30 hidden md:hidden transition-opacity"></div>
+
+        <!-- SIDEBAR DE SECCIONES (ÁRBOL DE CARPETAS) -->
+        <aside id="sidebar" class="fixed md:relative inset-y-0 left-0 w-72 md:w-80 bg-slate-900 border-r border-slate-800 z-40 transform -translate-x-full md:translate-x-0 transition-transform duration-300 ease-in-out flex flex-col h-full">
+            
+            <div class="p-3 border-b border-slate-800 flex items-center justify-between">
+                <span class="text-xs font-semibold text-slate-400 uppercase tracking-wider flex items-center gap-2">
+                    <i class="fa-solid fa-sitemap"></i> Explorador de Secciones
+                </span>
+                <button onclick="openCreateFolderModal(null)" class="text-xs bg-brand-600 hover:bg-brand-500 text-white px-2.5 py-1.5 rounded-lg flex items-center gap-1 font-medium shadow-md shadow-brand-600/30 transition">
+                    <i class="fa-solid fa-folder-plus"></i> Nueva
+                </button>
+            </div>
+
+            <!-- Buscador de secciones y notas -->
+            <div class="p-2 border-b border-slate-800">
+                <div class="relative">
+                    <i class="fa-solid fa-magnifying-glass absolute left-3 top-1/2 -translate-y-1/2 text-slate-500 text-xs"></i>
+                    <input type="text" id="sidebarSearchInput" oninput="renderFolderTree()" placeholder="Buscar secciones y notas..." autocomplete="off" class="w-full bg-slate-950 border border-slate-800 rounded-xl pl-8 pr-8 py-2 text-xs text-slate-100 placeholder-slate-500 focus:outline-none focus:border-brand-500">
+                    <button id="sidebarSearchClear" onclick="clearSidebarSearch()" class="hidden absolute right-2 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white p-1" title="Limpiar búsqueda"><i class="fa-solid fa-xmark text-xs"></i></button>
+                </div>
+            </div>
+
+            <!-- Arbol de Navegacion -->
+            <div id="folderTreeContainer" class="flex-1 overflow-y-auto p-2 space-y-1">
+                <!-- Se genera dinámicamente -->
+            </div>
+
+            <!-- Footer Sidebar con accesos rápidos -->
+            <div class="p-3 border-t border-slate-800 bg-slate-950/40 text-xs text-slate-400 flex justify-between items-center">
+                <span id="folderCountText">0 Secciones</span>
+                <span id="noteCountText">0 Notas</span>
+            </div>
+        </aside>
+
+        <!-- CONTENIDO PRINCIPAL / VISTA DE CARPETA Y NOTAS -->
+        <main class="flex-1 flex flex-col h-full bg-slate-950 overflow-hidden relative">
+
+            <!-- BARRA NAVEGACIÓN VISTA (MÓVIL SWITCHER & BREADCRUMBS) -->
+            <div class="bg-slate-900/60 border-b border-slate-800 px-4 py-2.5 flex items-center justify-start gap-2 overflow-x-auto">
+                <button id="backFolderBtn" onclick="goToParentFolder()" title="Volver a la carpeta superior" class="hidden shrink-0 w-7 h-7 rounded-lg bg-slate-800 hover:bg-slate-700 text-slate-300 hover:text-white border border-slate-700 flex items-center justify-center transition">
+                    <i class="fa-solid fa-arrow-left text-xs"></i>
+                </button>
+                <div id="breadcrumbs" class="flex items-center text-xs text-slate-400 whitespace-nowrap overflow-x-auto py-1">
+                    <!-- Se genera dinámicamente -->
+                </div>
+            </div>
+
+            <!-- CONTENEDOR PRINCIPAL CON VISTAS SEPARADAS (NOTAS / REMINDERS) -->
+            <div id="mainViewContainer" class="flex-1 overflow-y-auto p-4 md:p-6 pb-24 md:pb-6 space-y-6">
+                
+                <!-- VISTA DE SECCIÓN ACTIVA -->
+                <div id="notesSectionView">
+                    <!-- Encabezado de la Sección Actual -->
+                    <div class="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-6 bg-slate-900/40 border border-slate-800/80 p-4 rounded-2xl">
+                        <div class="flex items-center space-x-3">
+                            <div class="p-3 rounded-xl bg-slate-800 text-brand-500 border border-slate-700/50">
+                                <i id="currentFolderIcon" class="fa-solid fa-folder-open text-xl"></i>
+                            </div>
+                            <div>
+                                <h2 id="currentFolderName" class="text-lg font-bold text-white">Todas las Notas</h2>
+                                <p id="currentFolderDesc" class="text-xs text-slate-400">Selecciona o crea una sección para organizarte</p>
+                            </div>
+                        </div>
+
+                        <div class="flex items-center gap-2">
+                            <button onclick="openCreateFolderModal(state.folders.some(f => f.id === state.currentFolderId) ? state.currentFolderId : null)" class="flex-1 sm:flex-none text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 border border-slate-700 px-3 py-2 rounded-xl flex items-center justify-center gap-1.5 transition">
+                                <i class="fa-solid fa-folder-plus text-brand-400"></i> Subsección
+                            </button>
+                            <button onclick="openNoteModal()" class="flex-1 sm:flex-none text-xs bg-brand-600 hover:bg-brand-500 text-white px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 font-medium shadow-md shadow-brand-600/30 transition">
+                                <i class="fa-solid fa-plus"></i> Nueva Nota
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- SUBSECCIONES (CARPETAS INTERNAS) -->
+                    <div id="subfoldersSection" class="mb-6 hidden">
+                        <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 mb-3 flex items-center gap-2">
+                            <i class="fa-regular fa-folder"></i> Subsecciones
+                        </h3>
+                        <div id="subfoldersGrid" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+                            <!-- Tarjetas de subcarpetas dinámicas -->
+                        </div>
+                    </div>
+
+                    <!-- REJILLA DE NOTAS -->
+                    <div>
+                        <div class="flex items-center justify-between mb-3">
+                            <h3 class="text-xs font-semibold uppercase tracking-wider text-slate-400 flex items-center gap-2">
+                                <i class="fa-regular fa-sticky-note"></i> Notas en esta sección
+                            </h3>
+                            <div class="relative w-48 sm:w-64">
+                                <i class="fa-solid fa-search absolute left-3 top-2.5 text-xs text-slate-500"></i>
+                                <input type="text" id="searchNotesInput" oninput="renderNotes()" placeholder="Buscar nota..." class="w-full bg-slate-900 border border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs text-slate-200 focus:outline-none focus:border-brand-500">
+                            </div>
+                        </div>
+
+                        <div id="notesGrid" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                            <!-- Notas renderizadas aquí -->
+                        </div>
+
+                        <!-- Estado Vacío -->
+                        <div id="emptyNotesState" class="hidden text-center py-12 px-4 bg-slate-900/20 border border-dashed border-slate-800 rounded-2xl">
+                            <i class="fa-regular fa-folder-open text-4xl text-slate-600 mb-3 block"></i>
+                            <p class="text-slate-400 text-sm font-medium">No hay notas en esta sección</p>
+                            <p class="text-slate-500 text-xs mt-1">Crea tu primera nota o añade una subsección para organizar tus tareas de trabajo.</p>
+                            <button onclick="openNoteModal()" class="mt-4 text-xs bg-brand-600/20 hover:bg-brand-600/30 text-brand-400 border border-brand-500/30 px-4 py-2 rounded-xl inline-flex items-center gap-2 transition">
+                                <i class="fa-solid fa-plus"></i> Crear nota ahora
+                            </button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- VISTA DE RECORDATORIOS Y TAREAS -->
+                <div id="remindersSectionView" class="hidden">
+                    <div class="flex items-center justify-between mb-6 bg-slate-900/40 border border-slate-800/80 p-4 rounded-2xl">
+                        <div class="flex items-center space-x-3">
+                            <div class="p-3 rounded-xl bg-amber-500/10 text-amber-500 border border-amber-500/20">
+                                <i class="fa-solid fa-bell text-xl"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-lg font-bold text-white">Gestor de Recordatorios</h2>
+                                <p class="text-xs text-slate-400">Controla tus fechas de entrega, citas y tareas pendientes</p>
+                            </div>
+                        </div>
+
+                        <button onclick="openReminderModal()" class="text-xs bg-amber-600 hover:bg-amber-500 text-white px-3.5 py-2 rounded-xl flex items-center justify-center gap-1.5 font-medium shadow-md shadow-amber-600/30 transition">
+                            <i class="fa-solid fa-plus"></i> Nuevo Recordatorio
+                        </button>
+                    </div>
+
+                    <!-- Lista de Recordatorios -->
+                    <div id="reminderFilters" class="flex flex-wrap gap-2 mb-3"></div>
+                    <div class="space-y-3" id="remindersList">
+                        <!-- Recordatorios dinámicos -->
+                    </div>
+                </div>
+
+            </div>
+        </main>
+    </div>
+
+    <!-- NAVEGACIÓN INFERIOR PARA MÓVIL -->
+    <nav class="md:hidden bg-slate-900/95 backdrop-blur-md border-t border-slate-800 fixed bottom-0 left-0 right-0 z-20 flex justify-around p-2">
+        <button id="navBtnNotes" onclick="switchMainTab('notes')" class="flex flex-col items-center py-1 px-4 text-brand-500">
+            <i class="fa-solid fa-folder-open text-lg"></i>
+            <span class="text-[10px] font-medium mt-1">Secciones</span>
+        </button>
+        <button id="navBtnReminders" onclick="switchMainTab('reminders')" class="flex flex-col items-center py-1 px-4 text-slate-400 hover:text-slate-200">
+            <div class="relative">
+                <i class="fa-solid fa-bell text-lg"></i>
+                <span id="reminderBadgeCount" class="hidden absolute -top-1 -right-2 bg-amber-500 text-slate-950 text-[9px] font-bold w-4 h-4 rounded-full flex items-center justify-center">0</span>
+            </div>
+            <span class="text-[10px] font-medium mt-1">Recordatorios</span>
+        </button>
+        <button onclick="openSettingsModal()" class="flex flex-col items-center py-1 px-4 text-slate-400 hover:text-slate-200">
+            <i class="fa-solid fa-database text-lg"></i>
+            <span class="text-[10px] font-medium mt-1">Backup</span>
+        </button>
+    </nav>
+
+    <!-- ================= MODALES ================= -->
+
+    <!-- MODAL CREAR/EDITAR SECCIÓN -->
+    <div id="folderModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 hidden overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4 my-auto">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 id="folderModalTitle" class="font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-folder-plus text-brand-500"></i> Nueva Sección
+                </h3>
+                <button onclick="closeModal('folderModal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <input type="hidden" id="folderParentId">
+            <input type="hidden" id="folderEditId">
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Nombre de la Sección/Subsección</label>
+                <input type="text" id="folderNameInput" placeholder="Ej. Proyectos 2026, Clientes, Facturas..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand-500">
+            </div>
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Icono / Color</label>
+                <div class="flex gap-2">
+                    <select id="folderIconSelect" class="bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand-500 flex-1">
+                        <option value="fa-folder">📁 Carpeta Estándar</option>
+                        <option value="fa-briefcase">💼 Trabajo / Negocios</option>
+                        <option value="fa-diagram-project">📊 Proyecto</option>
+                        <option value="fa-user-tie">👤 Cliente</option>
+                        <option value="fa-file-invoice">🧾 Facturas / Finanzas</option>
+                        <option value="fa-wrench">🛠️ Herramientas / Soporte</option>
+                    </select>
+                </div>
+                <input type="hidden" id="folderColorValue">
+                <div id="folderColorPicker" class="flex flex-wrap gap-2 mt-3"></div>
+            </div>
+            <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button onclick="closeModal('folderModal')" class="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl">Cancelar</button>
+                <button id="folderSaveBtn" onclick="saveFolder()" class="px-4 py-2 text-xs bg-brand-600 hover:bg-brand-500 text-white font-medium rounded-xl shadow-md shadow-brand-600/30">Guardar Sección</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CREAR/EDITAR NOTA CON FOTOS -->
+    <div id="noteModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 hidden overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xl p-5 shadow-2xl space-y-4 my-auto">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 id="noteModalTitle" class="font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-regular fa-sticky-note text-brand-500"></i> Nueva Nota
+                </h3>
+                <button onclick="closeModal('noteModal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            
+            <input type="hidden" id="noteEditId">
+
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Título de la nota</label>
+                <input type="text" id="noteTitleInput" placeholder="Ej. Informe de reunión, Notas de obra..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand-500">
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Sección de destino</label>
+                <select id="noteFolderSelect" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand-500">
+                    <!-- Opciones de carpetas generadas -->
+                </select>
+            </div>
+
+            <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer">
+                <input type="checkbox" id="notePinnedInput" class="w-4 h-4 rounded border-slate-700 bg-slate-950 text-brand-500 focus:ring-0">
+                <i class="fa-solid fa-thumbtack text-amber-400"></i> Fijar esta nota arriba
+            </label>
+
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Contenido de la Nota</label>
+                <textarea id="noteContentInput" rows="5" placeholder="Escribe aquí los detalles del trabajo, instrucciones, observaciones..." class="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-sm text-slate-100 focus:outline-none focus:border-brand-500"></textarea>
+            </div>
+
+            <!-- ADJUNTAR FOTOS -->
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Imágenes / Fotos Adjuntas</label>
+                <div class="flex items-center gap-3">
+                    <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-2 rounded-xl text-xs flex items-center gap-2 transition">
+                        <i class="fa-solid fa-camera text-brand-400"></i> Subir Foto / Captura
+                        <input type="file" id="noteImageInput" accept="image/*" multiple class="hidden" onchange="handleImageUpload(event)">
+                    </label>
+                    <span class="text-[11px] text-slate-500">Formatos: JPG, PNG, WEBP</span>
+                </div>
+                <!-- Vista previa imágenes subidas -->
+                <div id="imagePreviewContainer" class="flex flex-wrap gap-2 mt-3 max-h-36 overflow-y-auto p-1">
+                    <!-- Previews dinámicos -->
+                </div>
+            </div>
+
+            <!-- DOCUMENTOS ADJUNTOS -->
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Documentos adjuntos</label>
+                <div class="flex items-center gap-3 flex-wrap">
+                    <label class="cursor-pointer bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-2 rounded-xl text-xs flex items-center gap-2 transition">
+                        <i class="fa-solid fa-paperclip text-brand-400"></i> Subir documento
+                        <input type="file" id="noteDocInput" multiple class="hidden" onchange="handleDocUpload(event)">
+                    </label>
+                    <span class="text-[11px] text-slate-500">PDF, TXT, Word, Excel… (máx. 10 MB cada uno)</span>
+                </div>
+                <div id="attachmentPreviewContainer" class="mt-2 space-y-1 max-h-40 overflow-y-auto"></div>
+            </div>
+
+            <!-- ENLACES WEB -->
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Enlaces web (documentación online)</label>
+                <div class="flex flex-col sm:flex-row gap-2">
+                    <input type="text" id="noteLinkTitleInput" placeholder="Nombre (opcional)" class="sm:w-2/5 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand-500">
+                    <input type="url" id="noteLinkUrlInput" placeholder="https://..." onkeydown="if(event.key==='Enter'){event.preventDefault();addTempLink();}" class="flex-1 min-w-0 bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-brand-500">
+                    <button type="button" id="addLinkBtn" onclick="addTempLink()" class="bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 px-3 py-2 rounded-xl text-xs flex items-center justify-center gap-2 transition"><i class="fa-solid fa-link text-brand-400"></i> <span id="addLinkBtnText">Añadir</span></button>
+                    <button type="button" id="cancelLinkEditBtn" onclick="cancelLinkEdit()" class="hidden bg-slate-800 hover:bg-slate-700 text-slate-400 border border-slate-700 px-3 py-2 rounded-xl text-xs items-center justify-center transition">Cancelar</button>
+                </div>
+                <div id="linkPreviewContainer" class="mt-2 space-y-1 max-h-40 overflow-y-auto"></div>
+            </div>
+
+            <!-- RECORDATORIOS RELACIONADOS -->
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Recordatorios relacionados</label>
+                <div id="noteRemindersList" class="max-h-32 overflow-y-auto space-y-0.5 bg-slate-950 border border-slate-800 rounded-xl p-2"></div>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button onclick="closeModal('noteModal')" class="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl">Cancelar</button>
+                <button onclick="saveNote()" class="px-4 py-2 text-xs bg-brand-600 hover:bg-brand-500 text-white font-medium rounded-xl shadow-md shadow-brand-600/30">Guardar Nota</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIRMAR ELIMINACIÓN -->
+    <div id="confirmModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-[60] flex items-start justify-center p-4 hidden overflow-y-auto" onclick="if (event.target === this) cancelConfirm()">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4 my-auto">
+            <div class="flex items-start gap-3">
+                <div class="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/20 flex items-center justify-center shrink-0">
+                    <i class="fa-solid fa-trash-can text-rose-400"></i>
+                </div>
+                <div class="min-w-0">
+                    <h3 id="confirmModalTitle" class="font-bold text-slate-100 text-sm">¿Eliminar?</h3>
+                    <p id="confirmModalMessage" class="text-xs text-slate-400 mt-1 leading-relaxed break-words whitespace-pre-line"></p>
+                </div>
+            </div>
+            <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button onclick="cancelConfirm()" class="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl">Cancelar</button>
+                <button id="confirmAcceptBtn" onclick="acceptConfirm()" class="px-4 py-2 text-xs bg-rose-600 hover:bg-rose-500 text-white font-medium rounded-xl shadow-md shadow-rose-600/30">Sí, eliminar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL RECORDATORIOS -->
+    <div id="reminderModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 hidden overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4 my-auto">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-bell text-amber-500"></i> <span id="reminderModalTitle">Nuevo Recordatorio</span>
+                </h3>
+                <button onclick="closeModal('reminderModal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Título / Tarea</label>
+                <input type="text" id="reminderTitleInput" placeholder="Ej. Llama a cliente, Entregar presupuesto..." class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-sm text-slate-100 focus:outline-none focus:border-amber-500">
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1">Fecha Límite</label>
+                    <input type="date" id="reminderDateInput" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+                </div>
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1">Prioridad</label>
+                    <select id="reminderPriorityInput" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+                        <option value="baja">🟢 Baja</option>
+                        <option value="media" selected>🟡 Media</option>
+                        <option value="alta">🔴 Alta / Urgente</option>
+                    </select>
+                </div>
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Nota relacionada (opcional)</label>
+                <select id="reminderNoteSelect" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500"></select>
+            </div>
+
+            <div class="grid grid-cols-2 gap-3">
+                <div>
+                    <label class="block text-xs font-medium text-slate-400 mb-1">Hora (opcional)</label>
+                    <input type="time" id="reminderTimeInput" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+                </div>
+                <label class="flex items-center gap-2 text-xs text-slate-300 cursor-pointer self-end pb-2">
+                    <input type="checkbox" id="reminderGcalInput" class="w-4 h-4 rounded border-slate-700 bg-slate-950 text-amber-500 focus:ring-0">
+                    <span><i class="fa-regular fa-calendar-plus text-brand-400 mr-1"></i>Google Calendar</span>
+                </label>
+            </div>
+
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">Repetir</label>
+                <select id="reminderRepeatInput" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-amber-500">
+                    <option value="">No se repite</option>
+                    <option value="diaria">🔁 Cada día</option>
+                    <option value="semanal">🔁 Cada semana</option>
+                    <option value="mensual">🔁 Cada mes</option>
+                    <option value="anual">🔁 Cada año</option>
+                </select>
+            </div>
+
+            <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button onclick="closeModal('reminderModal')" class="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl">Cancelar</button>
+                <button id="reminderSaveBtn" onclick="saveReminder()" class="px-4 py-2 text-xs bg-amber-600 hover:bg-amber-500 text-white font-medium rounded-xl shadow-md shadow-amber-600/30">Crear Recordatorio</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL COPIA DE SEGURIDAD / BACKUP -->
+    <div id="settingsModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 hidden overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-5 my-auto">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-floppy-disk text-indigo-400"></i> Backup y Recuperación
+                </h3>
+                <button onclick="closeModal('settingsModal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <p class="text-xs text-slate-400 leading-relaxed">
+                Guarda una copia exacta de todas tus secciones, notas, imágenes y recordatorios en un archivo <code class="text-brand-400">.json</code> para conservarlos o restaurarlos en cualquier momento o versión futura.
+            </p>
+
+            <div class="space-y-3">
+                <button onclick="exportDataJSON()" class="w-full bg-indigo-600/20 hover:bg-indigo-600/30 border border-indigo-500/30 text-indigo-300 font-medium py-2.5 px-4 rounded-xl text-xs flex items-center justify-between transition">
+                    <span class="flex items-center gap-2"><i class="fa-solid fa-download"></i> Exportar Datos (.json)</span>
+                    <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                </button>
+
+                <label class="w-full bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 font-medium py-2.5 px-4 rounded-xl text-xs flex items-center justify-between cursor-pointer transition">
+                    <span class="flex items-center gap-2"><i class="fa-solid fa-upload text-brand-400"></i> Importar Datos desde Archivo</span>
+                    <input type="file" id="importJsonInput" accept=".json" class="hidden" onchange="importDataJSON(event)">
+                    <i class="fa-solid fa-chevron-right text-[10px]"></i>
+                </label>
+            </div>
+
+            <div class="pt-2 border-t border-slate-800 text-right">
+                <button onclick="closeModal('settingsModal')" class="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl">Cerrar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL CONFIGURACIÓN NUBE -->
+    <div id="syncModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 hidden overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-5 shadow-2xl space-y-4 my-auto">
+            <div class="flex justify-between items-center border-b border-slate-800 pb-3">
+                <h3 class="font-bold text-slate-100 flex items-center gap-2">
+                    <i class="fa-solid fa-cloud text-brand-500"></i> Sincronización en la Nube
+                </h3>
+                <button onclick="closeModal('syncModal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+
+            <p class="text-xs text-slate-400 leading-relaxed">
+                Sincroniza notas y fotos con tu Google Drive (carpeta privada de la app) para usarlas a la vez en móvil y ordenador, sin límite de 5 MB. Requiere abrir el programa desde una dirección web (https), no como archivo local.
+            </p>
+
+            <details class="bg-slate-950 border border-slate-800 rounded-xl p-3 text-[11px] text-slate-400 leading-relaxed">
+                <summary class="cursor-pointer text-slate-300 text-xs font-medium">Cómo conseguir el ID de cliente (una sola vez)</summary>
+                <ol class="list-decimal ml-4 mt-2 space-y-1">
+                    <li>En console.cloud.google.com crea un proyecto y activa "Google Drive API".</li>
+                    <li>En "Pantalla de consentimiento OAuth" elige Externa y añade tu correo como usuario de prueba.</li>
+                    <li>En "Credenciales" crea un "ID de cliente de OAuth" de tipo Aplicación web y, en Orígenes autorizados, escribe la dirección donde alojes este archivo.</li>
+                    <li>Pega aquí el ID y pulsa Conectar. En cada dispositivo abre esa misma dirección y repite el paso de conectar.</li>
+                </ol>
+            </details>
+
+            <div>
+                <label class="block text-xs font-medium text-slate-400 mb-1">ID de cliente de Google</label>
+                <input type="text" id="gClientIdInput" placeholder="xxxxxxxx.apps.googleusercontent.com" autocomplete="off" class="w-full bg-slate-950 border border-slate-800 rounded-xl px-3 py-2 text-xs text-slate-100 focus:outline-none focus:border-brand-500">
+            </div>
+
+            <div class="bg-slate-950 p-3 rounded-xl border border-slate-800 space-y-2">
+                <div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-300">Estado:</span>
+                    <span id="syncModalStatus" class="text-slate-400 font-medium">Solo local</span>
+                </div>
+                <div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-300">Última sincronización:</span>
+                    <span id="lastSyncTimeText" class="text-slate-400">—</span>
+                </div>
+                <div class="flex items-center justify-between text-xs">
+                    <span class="text-slate-300">Datos en este dispositivo:</span>
+                    <span id="storageUsageText" class="text-slate-400">—</span>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-2 pt-2 border-t border-slate-800">
+                <button onclick="connectDrive()" class="w-full px-4 py-2 text-xs bg-brand-600 hover:bg-brand-500 text-white font-medium rounded-xl shadow-md shadow-brand-600/30 flex items-center justify-center gap-2">
+                    <i class="fa-brands fa-google-drive"></i> Conectar con Google Drive
+                </button>
+                <div class="flex gap-2">
+                    <button onclick="forceSync()" class="flex-1 px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl flex items-center justify-center gap-2"><i class="fa-solid fa-rotate"></i> Sincronizar ahora</button>
+                    <button onclick="disconnectDrive()" class="flex-1 px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-rose-300 rounded-xl flex items-center justify-center gap-2"><i class="fa-solid fa-link-slash"></i> Desconectar</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL VER NOTA COMPLETA -->
+    <div id="noteViewModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 hidden overflow-y-auto">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-xl p-5 shadow-2xl space-y-4 my-auto">
+            <div class="flex justify-between items-start gap-3 border-b border-slate-800 pb-3">
+                <div class="min-w-0">
+                    <h3 id="noteViewTitle" class="font-bold text-slate-100 break-words"></h3>
+                    <p id="noteViewMeta" class="text-[11px] text-slate-500 mt-0.5"></p>
+                </div>
+                <button onclick="closeModal('noteViewModal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <p id="noteViewBody" class="text-sm text-slate-200 leading-relaxed whitespace-pre-line break-words"></p>
+            <div id="noteViewImages" class="flex flex-wrap gap-2"></div>
+            <div id="noteViewDocs" class="flex flex-col gap-1"></div>
+            <div id="noteViewLinks" class="flex flex-col gap-1"></div>
+            <div id="noteViewReminders" class="flex flex-col gap-1"></div>
+            <div class="flex justify-end gap-2 pt-2 border-t border-slate-800">
+                <button onclick="closeModal('noteViewModal')" class="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl">Cerrar</button>
+                <button id="noteViewMoveBtn" class="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-200 rounded-xl"><i class="fa-solid fa-arrows-up-down-left-right mr-1"></i> Mover a…</button>
+                <button id="noteViewEditBtn" class="px-4 py-2 text-xs bg-brand-600 hover:bg-brand-500 text-white font-medium rounded-xl shadow-md shadow-brand-600/30"><i class="fa-solid fa-pen mr-1"></i> Editar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL MOVER NOTA A OTRA CARPETA -->
+    <div id="moveNoteModal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-sm z-50 flex items-start justify-center p-4 hidden overflow-y-auto" onclick="if (event.target === this) closeModal('moveNoteModal')">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-sm p-5 shadow-2xl space-y-4 my-auto">
+            <div class="flex justify-between items-start gap-3 border-b border-slate-800 pb-3">
+                <div class="min-w-0">
+                    <h3 class="font-bold text-slate-100 flex items-center gap-2"><i class="fa-solid fa-arrows-up-down-left-right text-brand-500"></i> Mover nota a…</h3>
+                    <p id="moveNoteTitle" class="text-[11px] text-slate-500 mt-0.5 truncate"></p>
+                </div>
+                <button onclick="closeModal('moveNoteModal')" class="text-slate-400 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+            </div>
+            <div id="moveNoteList" class="max-h-72 overflow-y-auto space-y-0.5"></div>
+            <div class="flex justify-end pt-2 border-t border-slate-800">
+                <button onclick="closeModal('moveNoteModal')" class="px-4 py-2 text-xs bg-slate-800 hover:bg-slate-700 text-slate-300 rounded-xl">Cancelar</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISOR DE IMAGEN A PANTALLA COMPLETA -->
+    <!-- VISOR DE PDF -->
+    <div id="pdfViewerModal" class="fixed inset-0 bg-slate-950 z-[55] hidden flex flex-col">
+        <div class="flex items-center gap-2 px-3 pb-2 bg-slate-900 border-b border-slate-800" style="padding-top:max(0.75rem, env(safe-area-inset-top));">
+            <i class="fa-solid fa-file-pdf text-rose-400 shrink-0"></i>
+            <div class="min-w-0 flex-1">
+                <p id="pdfViewerTitle" class="text-xs font-semibold text-slate-100 truncate"></p>
+                <p id="pdfViewerInfo" class="text-[10px] text-slate-500"></p>
+            </div>
+            <button onclick="pdfvStep(1/1.25)" title="Alejar" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-300 hover:bg-slate-800"><i class="fa-solid fa-minus"></i></button>
+            <span id="pdfZoomLabel" class="w-10 text-center text-[11px] text-slate-400 tabular-nums">100%</span>
+            <button onclick="pdfvStep(1.25)" title="Ampliar" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-300 hover:bg-slate-800"><i class="fa-solid fa-plus"></i></button>
+            <button onclick="pdfvShare()" title="Abrir con otra app" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-300 hover:bg-slate-800 hover:text-brand-400"><i class="fa-solid fa-share-nodes"></i></button>
+            <button onclick="pdfvDownload()" title="Descargar" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-300 hover:bg-slate-800 hover:text-emerald-400"><i class="fa-solid fa-download"></i></button>
+            <button onclick="closePdfViewer()" title="Cerrar" class="w-9 h-9 flex items-center justify-center rounded-lg text-slate-300 hover:bg-slate-800 hover:text-white"><i class="fa-solid fa-xmark"></i></button>
+        </div>
+        <div id="pdfViewerScroll" class="flex-1 overflow-auto bg-slate-800 p-2" style="-webkit-overflow-scrolling:touch; touch-action:pan-x pan-y;">
+            <div id="pdfViewerPages" class="flex flex-col items-start gap-2 w-max min-w-full" style="align-items:center; will-change:transform;"></div>
+        </div>
+    </div>
+
+    <div id="imageViewerModal" class="fixed inset-0 bg-slate-950/95 z-50 flex items-center justify-center p-4 hidden select-none overflow-hidden" style="touch-action:none;">
+        <img id="fullImageView" src="" alt="" draggable="false" class="max-w-full max-h-full object-contain rounded-lg shadow-2xl" style="transform-origin:center center; will-change:transform; -webkit-user-drag:none; -webkit-touch-callout:none;">
+
+        <button data-viewer-ui onclick="closeImageViewer()" title="Cerrar" class="absolute right-4 w-11 h-11 flex items-center justify-center rounded-full bg-slate-900/85 border border-slate-700 text-slate-300 hover:text-white text-lg" style="top:max(1rem, env(safe-area-inset-top));"><i class="fa-solid fa-xmark"></i></button>
+
+        <div id="imageViewerHint" class="pointer-events-none absolute left-1/2 -translate-x-1/2 text-[11px] text-slate-300 bg-slate-900/80 border border-slate-700 rounded-full px-3 py-1.5 transition-opacity duration-500 whitespace-nowrap" style="top:max(1.25rem, env(safe-area-inset-top));">Pellizca o usa la rueda para ampliar · doble toque para acercar</div>
+
+        <div data-viewer-ui class="absolute left-1/2 -translate-x-1/2 flex items-center gap-1 bg-slate-900/85 border border-slate-700 rounded-full px-2 py-1.5 backdrop-blur" style="bottom:max(1.25rem, env(safe-area-inset-bottom));">
+            <button onclick="imgvStep(1/1.5)" title="Alejar" class="w-10 h-10 flex items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white"><i class="fa-solid fa-minus"></i></button>
+            <span id="imageZoomLabel" class="w-12 text-center text-[11px] text-slate-400 tabular-nums">100%</span>
+            <button onclick="imgvStep(1.5)" title="Ampliar" class="w-10 h-10 flex items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white"><i class="fa-solid fa-plus"></i></button>
+            <button onclick="imgvReset()" title="Tamaño original" class="w-10 h-10 flex items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white"><i class="fa-solid fa-expand"></i></button>
+            <button onclick="imgvOpenTab()" title="Abrir en una pestaña nueva" class="w-10 h-10 flex items-center justify-center rounded-full text-slate-300 hover:bg-slate-800 hover:text-white"><i class="fa-solid fa-up-right-from-square"></i></button>
+        </div>
+    </div>
+
+    <!-- LOGICA JAVASCRIPT PRINCIPAL -->
+    <script>
+        // ESTADO GLOBAL DE LA APLICACIÓN
+        const DEFAULT_STATE = {
+            folders: [
+                { id: 'f-1', name: 'Trabajo General', parentId: null, icon: 'fa-briefcase' },
+                { id: 'f-2', name: 'Proyectos Activos', parentId: 'f-1', icon: 'fa-diagram-project' },
+                { id: 'f-3', name: 'Clientes & Contactos', parentId: 'f-1', icon: 'fa-user-tie' }
+            ],
+            notes: [
+                {
+                    id: 'n-1',
+                    folderId: 'f-2',
+                    title: 'Reunión Inicial del Proyecto WorkNotes',
+                    content: 'Definir requerimientos del sistema de notas móviles, estructura jerárquica y backups locales en JSON.',
+                    images: [],
+                    updatedAt: new Date().toISOString()
+                }
+            ],
+            reminders: [
+                {
+                    id: 'r-1',
+                    title: 'Revisar copia de seguridad semanal',
+                    dueDate: new Date(Date.now() + 86400000).toISOString().split('T')[0],
+                    priority: 'alta',
+                    completed: false
+                }
+            ],
+            currentFolderId: 'f-1',
+            tempNoteImages: []
+        };
+
+        let state = DEFAULT_STATE;
+
+        // Huella de los datos de ejemplo, para saber si este dispositivo aún no tiene datos propios
+        const sigOfState = st => JSON.stringify(['folders', 'notes', 'reminders'].map(k => (st[k] || []).map(i => [i.id, i.name || i.title, i.content || ''])));
+        const DEFAULT_SIG = sigOfState(DEFAULT_STATE);
+        const isPristine = () => sigOfState(state) === DEFAULT_SIG;
+
+        // ALMACENAMIENTO LOCAL EN INDEXEDDB (sin el límite de 5 MB de localStorage)
+        function idbOpen() {
+            return new Promise((res, rej) => {
+                const r = indexedDB.open('worknotes', 1);
+                r.onupgradeneeded = () => r.result.createObjectStore('kv');
+                r.onsuccess = () => res(r.result);
+                r.onerror = () => rej(r.error);
+            });
+        }
+        async function idbGet(key) {
+            const db = await idbOpen();
+            return new Promise((res, rej) => { const q = db.transaction('kv').objectStore('kv').get(key); q.onsuccess = () => res(q.result); q.onerror = () => rej(q.error); });
+        }
+        async function idbSet(key, val) {
+            const db = await idbOpen();
+            return new Promise((res, rej) => { const t = db.transaction('kv', 'readwrite'); t.objectStore('kv').put(val, key); t.oncomplete = () => res(); t.onerror = () => rej(t.error); });
+        }
+
+        let knownIds = new Set();
+        let persistTimer = null;
+
+        async function loadState() {
+            let saved = null;
+            try { saved = await idbGet('state'); } catch (e) {}
+            if (!saved) { try { saved = JSON.parse(localStorage.getItem('worknotes_data') || 'null'); } catch (e) {} }
+            if (saved && saved.folders && saved.notes) state = saved;
+            state.reminders = state.reminders || [];
+            state.tomb = state.tomb || {};
+            state.tempNoteImages = [];
+            knownIds = new Set();
+            ['folders', 'notes', 'reminders'].forEach(k => state[k].forEach(i => knownIds.add(i.id)));
+        }
+
+        async function persistLocal() {
+            try {
+                await idbSet('state', state);
+                try { localStorage.removeItem('worknotes_data'); } catch (e) {}
+            } catch (e) {
+                try { localStorage.setItem('worknotes_data', JSON.stringify(state)); }
+                catch (e2) { alert('No hay espacio para guardar los datos en este dispositivo. Descarga una copia de seguridad.'); }
+            }
+        }
+
+        // Marca la fecha de modificación de cada elemento y registra los borrados (necesario para sincronizar varios dispositivos)
+        function hashStr(str) { let h = 5381; for (let i = 0; i < str.length; i++) h = ((h << 5) + h + str.charCodeAt(i)) | 0; return h; }
+        function itemHash(it) { const { _m, _h, ...rest } = it; return hashStr(JSON.stringify(rest)); }
+
+        function touchChanged() {
+            state.tomb = state.tomb || {};
+            const now = Date.now(); const cur = new Set(); let changed = false;
+            ['folders', 'notes', 'reminders'].forEach(k => (state[k] || []).forEach(it => {
+                cur.add(it.id);
+                const h = itemHash(it);
+                if (it._h !== h) { it._h = h; it._m = now; changed = true; }
+            }));
+            knownIds.forEach(id => { if (!cur.has(id)) { state.tomb[id] = now; changed = true; } });
+            knownIds = cur;
+            Object.keys(state.tomb).forEach(id => { if (now - state.tomb[id] > 90 * 86400000) delete state.tomb[id]; });
+            return changed;
+        }
+
+        // SECCIÓN VIRTUAL "SIN SECCIÓN": notas cuya sección ya no existe o no se puede alcanzar desde el menú
+        const ORPHAN_ID = '__sin_seccion__';
+
+        function isFolderReachable(folderId) {
+            const seen = new Set();
+            let f = state.folders.find(x => x.id === folderId);
+            while (f) {
+                if (seen.has(f.id)) return false;
+                seen.add(f.id);
+                if (f.parentId === null) return true;
+                f = state.folders.find(x => x.id === f.parentId);
+            }
+            return false;
+        }
+        const isOrphanNote = n => !isFolderReachable(n.folderId);
+
+        // Carpetas desplegadas en el menú lateral (se guarda aparte de los datos)
+        let expandedFolders = new Set();
+        try { expandedFolders = new Set(JSON.parse(localStorage.getItem('worknotes_expanded') || '[]')); } catch (e) {}
+
+        function saveExpanded() {
+            try { localStorage.setItem('worknotes_expanded', JSON.stringify([...expandedFolders])); } catch (e) {}
+        }
+
+        function expandAncestors(folderId) {
+            let f = state.folders.find(x => x.id === folderId);
+            while (f && f.parentId) {
+                expandedFolders.add(f.parentId);
+                f = state.folders.find(x => x.id === f.parentId);
+            }
+            saveExpanded();
+        }
+
+        function onFolderClick(folderId) {
+            const hasSubs = state.folders.some(f => f.parentId === folderId);
+            if (hasSubs) {
+                if (expandedFolders.has(folderId)) expandedFolders.delete(folderId);
+                else expandedFolders.add(folderId);
+                saveExpanded();
+            }
+            selectFolder(folderId, true);
+        }
+
+        // INICIALIZACIÓN
+        window.onload = async function() {
+            await loadState();
+            if (state.currentFolderId) expandAncestors(state.currentFolderId);
+            saveStateToStorage();
+            renderFolderTree();
+            renderCurrentFolderView();
+            renderNotes();
+            renderReminders();
+            setupResponsiveListeners();
+            updateStatsCounters();
+            startAutoSync();
+        };
+
+        // ALMACENAMIENTO Y PERSISTENCIA
+        function saveStateToStorage() {
+            const changed = touchChanged();
+            clearTimeout(persistTimer);
+            persistTimer = setTimeout(persistLocal, 300);
+            if (changed) scheduleSync();
+        }
+
+        // SINCRONIZACIÓN CON GOOGLE DRIVE (carpeta privada de la app: appDataFolder)
+        const GSYNC = {
+            clientId: localStorage.getItem('worknotes_gclient') || '',
+            connected: localStorage.getItem('worknotes_gconnected') === '1',
+            fileId: localStorage.getItem('worknotes_gfile') || '',
+            lastRemote: localStorage.getItem('worknotes_gremote') || '',
+            token: null, tokenExp: 0, busy: false, dirty: false, pendingUpload: false, timer: null
+        };
+        const GFILE_NAME = 'worknotes_data.json';
+
+        function setSyncStatus(kind, extra) {
+            const badge = document.getElementById('syncStatusBadge');
+            const modalText = document.getElementById('syncModalStatus');
+            const map = {
+                off:     ['text-slate-400',  'fa-cloud',               'Solo local'],
+                syncing: ['text-amber-400',  'fa-rotate fa-spin',      'Sincronizando…'],
+                ok:      ['text-emerald-400','fa-cloud-arrow-up',      'Sincronizado'],
+                error:   ['text-rose-400',   'fa-triangle-exclamation','Reconectar']
+            };
+            const [color, icon, label] = map[kind];
+            badge.className = `cursor-pointer text-[10px] ${color} flex items-center gap-1 mt-0.5`;
+            badge.innerHTML = `<i class="fa-solid ${icon} text-[9px]"></i> ${label}`;
+            if (modalText) { modalText.className = `${color} font-medium`; modalText.innerText = label + (extra ? ' · ' + extra : ''); }
+        }
+
+        function loadGIS() {
+            return new Promise((res, rej) => {
+                if (window.google && google.accounts && google.accounts.oauth2) return res();
+                const sc = document.createElement('script');
+                sc.src = 'https://accounts.google.com/gsi/client';
+                sc.onload = () => res(); sc.onerror = () => rej(new Error('No se pudo cargar el servicio de Google'));
+                document.head.appendChild(sc);
+            });
+        }
+
+        async function getToken(interactive) {
+            if (GSYNC.token && Date.now() < GSYNC.tokenExp - 60000) return GSYNC.token;
+            await loadGIS();
+            return new Promise((resolve, reject) => {
+                const tc = google.accounts.oauth2.initTokenClient({
+                    client_id: GSYNC.clientId,
+                    scope: 'https://www.googleapis.com/auth/drive.appdata',
+                    callback: (r) => {
+                        if (r.access_token) { GSYNC.token = r.access_token; GSYNC.tokenExp = Date.now() + (r.expires_in || 3600) * 1000; resolve(r.access_token); }
+                        else reject(new Error(r.error || 'auth'));
+                    },
+                    error_callback: (e) => reject(new Error('auth:' + (e.type || '')))
+                });
+                tc.requestAccessToken({ prompt: interactive && !GSYNC.connected ? 'consent' : '' });
+            });
+        }
+
+        async function gfetch(url, opts = {}, interactive = false) {
+            const t = await getToken(interactive);
+            const r = await fetch(url, { ...opts, headers: { ...(opts.headers || {}), Authorization: 'Bearer ' + t } });
+            if (r.status === 401) { GSYNC.token = null; throw new Error('auth'); }
+            if (!r.ok) throw new Error('Drive ' + r.status);
+            return r;
+        }
+
+        async function findRemote(interactive) {
+            const q = encodeURIComponent(`name='${GFILE_NAME}'`);
+            const r = await gfetch(`https://www.googleapis.com/drive/v3/files?spaces=appDataFolder&q=${q}&fields=files(id,modifiedTime)`, {}, interactive);
+            const j = await r.json();
+            return (j.files && j.files[0]) || null;
+        }
+
+        async function uploadRemote(body, fileId) {
+            const meta = fileId ? {} : { name: GFILE_NAME, parents: ['appDataFolder'] };
+            const base = 'https://www.googleapis.com/upload/drive/v3/files';
+            const url = fileId ? `${base}/${fileId}?uploadType=resumable&fields=id,modifiedTime` : `${base}?uploadType=resumable&fields=id,modifiedTime`;
+            const start = await gfetch(url, { method: fileId ? 'PATCH' : 'POST', headers: { 'Content-Type': 'application/json; charset=UTF-8' }, body: JSON.stringify(meta) });
+            const loc = start.headers.get('Location');
+            const up = await fetch(loc, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, body });
+            if (!up.ok) throw new Error('Subida ' + up.status);
+            return up.json();
+        }
+
+        // Fusión por elemento: gana la modificación más reciente; los borrados se respetan
+        function mergeStates(local, remote) {
+            const tomb = { ...(remote.tomb || {}) };
+            Object.entries(local.tomb || {}).forEach(([id, ts]) => { tomb[id] = Math.max(tomb[id] || 0, ts); });
+            const out = { ...local, tomb };
+            ['folders', 'notes', 'reminders'].forEach(k => {
+                const map = new Map();
+                (remote[k] || []).forEach(it => map.set(it.id, it));
+                (local[k] || []).forEach(it => { const r = map.get(it.id); if (!r || (it._m || 0) >= (r._m || 0)) map.set(it.id, it); });
+                out[k] = [...map.values()].filter(it => !(tomb[it.id] && tomb[it.id] >= (it._m || 0)));
+                out[k].forEach(it => { it._h = itemHash(it); });
+            });
+            return out;
+        }
+
+        const syncSig = st => ['folders', 'notes', 'reminders'].map(k => (st[k] || []).map(i => i.id + ':' + (i._m || 0)).sort().join(',')).join('|') + '|' + Object.keys(st.tomb || {}).sort().join(',');
+
+        function applyMergedState(merged) {
+            const keepFolder = merged.folders.some(f => f.id === state.currentFolderId) ? state.currentFolderId : null;
+            state = { ...merged, currentFolderId: keepFolder, tempNoteImages: [] };
+            knownIds = new Set();
+            ['folders', 'notes', 'reminders'].forEach(k => state[k].forEach(i => knownIds.add(i.id)));
+            persistLocal();
+            renderFolderTree(); renderCurrentFolderView(); renderNotes(); renderReminders();
+        }
+
+        async function syncNow(interactive = false) {
+            if (!GSYNC.clientId || (!GSYNC.connected && !interactive)) return;
+            if (GSYNC.busy) { GSYNC.dirty = true; return; }
+            GSYNC.busy = true; setSyncStatus('syncing');
+            try {
+                const meta = await findRemote(interactive);
+                let needUpload = GSYNC.pendingUpload || !meta;
+                if (meta) {
+                    GSYNC.fileId = meta.id;
+                    if (meta.modifiedTime !== GSYNC.lastRemote) {
+                        const r = await gfetch(`https://www.googleapis.com/drive/v3/files/${meta.id}?alt=media`);
+                        const remote = await r.json();
+                        const merged = isPristine() ? { ...remote, tomb: remote.tomb || {} } : mergeStates(state, remote);
+                        if (syncSig(merged) !== syncSig(state)) applyMergedState(merged);
+                        if (syncSig(merged) !== syncSig(remote)) needUpload = true;
+                    }
+                }
+                if (needUpload) {
+                    const body = JSON.stringify({ version: 2, savedAt: new Date().toISOString(), folders: state.folders, notes: state.notes, reminders: state.reminders, tomb: state.tomb });
+                    const res = await uploadRemote(body, GSYNC.fileId || null);
+                    GSYNC.fileId = res.id; GSYNC.lastRemote = res.modifiedTime;
+                } else if (meta) {
+                    GSYNC.lastRemote = meta.modifiedTime;
+                }
+                GSYNC.pendingUpload = false; GSYNC.connected = true;
+                localStorage.setItem('worknotes_gconnected', '1');
+                localStorage.setItem('worknotes_gfile', GSYNC.fileId);
+                localStorage.setItem('worknotes_gremote', GSYNC.lastRemote);
+                const t = new Date().toLocaleTimeString('es-ES', { hour: '2-digit', minute: '2-digit' });
+                document.getElementById('lastSyncTimeText').innerText = t;
+                setSyncStatus('ok', t);
+                updateStorageInfo();
+            } catch (e) {
+                console.error('Sync', e);
+                setSyncStatus('error', String(e.message || e).slice(0, 40));
+            } finally {
+                GSYNC.busy = false;
+                if (GSYNC.dirty) { GSYNC.dirty = false; scheduleSync(2000); }
+            }
+        }
+
+        function scheduleSync(ms = 6000) {
+            if (!GSYNC.connected) return;
+            GSYNC.pendingUpload = true;
+            clearTimeout(GSYNC.timer);
+            GSYNC.timer = setTimeout(() => syncNow(false), ms);
+        }
+
+        function startAutoSync() {
+            setSyncStatus(GSYNC.connected ? 'syncing' : 'off');
+            if (GSYNC.connected) syncNow(false);
+            setInterval(() => { if (GSYNC.connected && document.visibilityState === 'visible') syncNow(false); }, 60000);
+            document.addEventListener('visibilitychange', () => { if (GSYNC.connected && document.visibilityState === 'visible') syncNow(false); });
+        }
+
+        async function connectDrive() {
+            const id = document.getElementById('gClientIdInput').value.trim();
+            if (!id) { alert('Pega primero el ID de cliente de Google.'); return; }
+            if (location.protocol === 'file:') { alert('Google no permite conectar desde un archivo local. Aloja este archivo en una dirección web (https) y ábrelo desde allí.'); return; }
+            GSYNC.clientId = id; localStorage.setItem('worknotes_gclient', id);
+            try {
+                await getToken(true);
+                await syncNow(true);
+            } catch (e) {
+                setSyncStatus('error');
+                alert('No se pudo conectar con Google. Revisa que el ID es correcto y que la dirección actual está en los orígenes autorizados.');
+            }
+        }
+
+        function disconnectDrive() {
+            GSYNC.connected = false; GSYNC.token = null; GSYNC.fileId = ''; GSYNC.lastRemote = '';
+            ['worknotes_gconnected', 'worknotes_gfile', 'worknotes_gremote'].forEach(k => localStorage.removeItem(k));
+            setSyncStatus('off');
+            alert('Desconectado. Tus datos siguen en este dispositivo y en Drive.');
+        }
+
+        async function updateStorageInfo() {
+            let bytes = 0;
+            try { bytes = (await navigator.storage.estimate()).usage || 0; } catch (e) {}
+            if (!bytes) bytes = JSON.stringify(state).length;
+            document.getElementById('storageUsageText').innerText = (bytes / 1048576).toFixed(1) + ' MB';
+        }
+
+        // CONTROLADORES DE PANTALLA Y MENÚS
+        function setupResponsiveListeners() {
+            const toggleSidebarBtn = document.getElementById('toggleSidebarBtn');
+            const sidebar = document.getElementById('sidebar');
+            const overlay = document.getElementById('sidebarOverlay');
+
+            function toggleSidebar() {
+                sidebar.classList.toggle('-translate-x-full');
+                overlay.classList.toggle('hidden');
+            }
+
+            toggleSidebarBtn.addEventListener('click', toggleSidebar);
+            overlay.addEventListener('click', toggleSidebar);
+        }
+
+        function switchMainTab(tab) {
+            const notesView = document.getElementById('notesSectionView');
+            const remindersView = document.getElementById('remindersSectionView');
+            const navBtnNotes = document.getElementById('navBtnNotes');
+            const navBtnReminders = document.getElementById('navBtnReminders');
+
+            if (tab === 'notes') {
+                notesView.classList.remove('hidden');
+                remindersView.classList.add('hidden');
+                navBtnNotes.className = "flex flex-col items-center py-1 px-4 text-brand-500";
+                navBtnReminders.className = "flex flex-col items-center py-1 px-4 text-slate-400 hover:text-slate-200";
+            } else {
+                notesView.classList.add('hidden');
+                remindersView.classList.remove('hidden');
+                navBtnReminders.className = "flex flex-col items-center py-1 px-4 text-amber-500";
+                navBtnNotes.className = "flex flex-col items-center py-1 px-4 text-slate-400 hover:text-slate-200";
+            }
+        }
+
+        // RENDERIZADO DEL ÁRBOL DE CARPETAS / SECCIONES
+        function renderFolderTree() {
+            const container = document.getElementById('folderTreeContainer');
+            container.innerHTML = '';
+
+            // Modo búsqueda: resultados directos entre secciones y notas
+            const sidebarQuery = (document.getElementById('sidebarSearchInput').value || '').trim();
+            document.getElementById('sidebarSearchClear').classList.toggle('hidden', !sidebarQuery);
+            if (sidebarQuery) {
+                renderSidebarSearchResults(sidebarQuery, container);
+                updateFolderSelectOptions();
+                updateStatsCounters();
+                return;
+            }
+
+            // Botón "Todas las secciones"
+            const allFoldersBtn = document.createElement('div');
+            allFoldersBtn.className = `p-2.5 rounded-xl cursor-pointer text-xs font-medium flex items-center justify-between transition ${state.currentFolderId === null ? 'bg-brand-600/20 text-brand-400 border border-brand-500/30' : 'text-slate-300 hover:bg-slate-800'}`;
+            allFoldersBtn.innerHTML = `<span class="flex items-center gap-2"><i class="fa-solid fa-layer-group"></i> Todas las notas</span>`;
+            allFoldersBtn.onclick = () => selectFolder(null);
+            container.appendChild(allFoldersBtn);
+
+            // Obtener carpetas raíz
+            const rootFolders = state.folders.filter(f => f.parentId === null);
+            rootFolders.forEach(folder => {
+                container.appendChild(createFolderDOM(folder, 0));
+            });
+
+            // "Sin sección": solo aparece si hay notas que se han quedado sin sección
+            const orphanCount = state.notes.filter(isOrphanNote).length;
+            if (orphanCount > 0) {
+                const sel = state.currentFolderId === ORPHAN_ID;
+                const orphanItem = document.createElement('div');
+                orphanItem.className = `mt-2 p-2 rounded-xl cursor-pointer text-xs flex items-center gap-2 transition ${sel ? 'bg-brand-600 text-white font-semibold shadow-md shadow-brand-600/20' : 'text-slate-300 hover:bg-slate-800/80 border border-dashed border-amber-500/30'}`;
+                orphanItem.style.marginLeft = '10px';
+                orphanItem.innerHTML = `<i class="fa-solid fa-inbox ${sel ? 'text-white' : 'text-amber-400'}"></i><span class="truncate flex-1">Sin sección</span><span class="text-[10px] shrink-0 ${sel ? 'text-white/70' : 'text-slate-500'}">${orphanCount}</span>`;
+                orphanItem.onclick = () => selectFolder(ORPHAN_ID);
+                container.appendChild(orphanItem);
+            }
+
+            updateFolderSelectOptions();
+            updateStatsCounters();
+        }
+
+        // BUSCADOR DEL MENÚ LATERAL
+        function normalizeText(str) {
+            return (str || '').toString().toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
+        }
+
+        function getFolderPathText(folderId) {
+            const names = [];
+            let f = state.folders.find(x => x.id === folderId);
+            while (f) {
+                names.unshift(f.name);
+                f = state.folders.find(x => x.id === f.parentId);
+            }
+            return names.join(' › ');
+        }
+
+        function renderSidebarSearchResults(query, container) {
+            const q = normalizeText(query);
+            const foundFolders = state.folders.filter(f => normalizeText(f.name).includes(q));
+            const foundNotes = state.notes.filter(n => normalizeText(n.title).includes(q) || normalizeText(n.content).includes(q));
+
+            if (foundFolders.length === 0 && foundNotes.length === 0) {
+                container.innerHTML = `
+                    <div class="text-center py-8 text-slate-500 text-xs">
+                        <i class="fa-solid fa-magnifying-glass text-2xl mb-2 block"></i>
+                        Sin resultados
+                    </div>`;
+                return;
+            }
+
+            if (foundFolders.length > 0) {
+                const title = document.createElement('div');
+                title.className = 'px-2 pt-1 pb-0.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider';
+                title.innerText = `Secciones (${foundFolders.length})`;
+                container.appendChild(title);
+                foundFolders.forEach(f => {
+                    const item = document.createElement('div');
+                    item.className = 'p-2 rounded-xl cursor-pointer text-xs flex items-center gap-2 text-slate-300 hover:bg-slate-800/80 transition';
+                    item.onclick = () => openFolderFromSearch(f.id);
+                    item.innerHTML = `
+                        <i class="fa-solid ${f.icon || 'fa-folder'} ${f.color ? '' : 'text-brand-400'}" ${f.color ? `style="color:${f.color}"` : ''}></i>
+                        <div class="truncate flex-1">
+                            <div class="truncate">${escapeHTML(f.name)}</div>
+                            ${f.parentId ? `<div class="truncate text-[10px] text-slate-500">${escapeHTML(getFolderPathText(f.parentId))}</div>` : ''}
+                        </div>`;
+                    container.appendChild(item);
+                });
+            }
+
+            if (foundNotes.length > 0) {
+                const title = document.createElement('div');
+                title.className = 'px-2 pt-2 pb-0.5 text-[10px] font-semibold text-slate-500 uppercase tracking-wider';
+                title.innerText = `Notas (${foundNotes.length})`;
+                container.appendChild(title);
+                foundNotes.forEach(n => {
+                    const item = document.createElement('div');
+                    item.className = 'p-2 rounded-xl cursor-pointer text-xs flex items-center gap-2 text-slate-300 hover:bg-slate-800/80 transition';
+                    item.onclick = () => openNoteFromSearch(n.id);
+                    item.innerHTML = `
+                        <i class="fa-regular fa-note-sticky text-slate-400"></i>
+                        <div class="truncate flex-1">
+                            <div class="truncate">${escapeHTML(n.title)}</div>
+                            <div class="truncate text-[10px] text-slate-500">${escapeHTML(getFolderPathText(n.folderId) || 'Sin sección')}</div>
+                        </div>`;
+                    container.appendChild(item);
+                });
+            }
+        }
+
+        function clearSidebarSearch() {
+            document.getElementById('sidebarSearchInput').value = '';
+            renderFolderTree();
+        }
+
+        function openFolderFromSearch(folderId) {
+            clearSidebarSearch();
+            selectFolder(folderId);
+        }
+
+        function openNoteFromSearch(noteId) {
+            const note = state.notes.find(n => n.id === noteId);
+            if (!note) return;
+            clearSidebarSearch();
+            const mainSearch = document.getElementById('searchNotesInput');
+            if (mainSearch) mainSearch.value = '';
+            selectFolder(note.folderId || null);
+            // Localizar la nota en pantalla y resaltarla un momento
+            setTimeout(() => {
+                const card = document.querySelector(`[data-note-id="${noteId}"]`);
+                if (card) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    card.classList.add('ring-2', 'ring-brand-500');
+                    setTimeout(() => card.classList.remove('ring-2', 'ring-brand-500'), 2000);
+                }
+            }, 50);
+        }
+
+        function countNotesIn(folderId) {
+            let n = state.notes.filter(x => x.folderId === folderId).length;
+            state.folders.filter(f => f.parentId === folderId).forEach(f => { n += countNotesIn(f.id); });
+            return n;
+        }
+
+        function createFolderDOM(folder, depth = 0) {
+            const wrapper = document.createElement('div');
+            wrapper.className = "space-y-0.5";
+
+            const isSelected = state.currentFolderId === folder.id;
+            const subfolders = state.folders.filter(f => f.parentId === folder.id);
+            const hasSubfolders = subfolders.length > 0;
+            const isExpanded = hasSubfolders && expandedFolders.has(folder.id);
+
+            const folderItem = document.createElement('div');
+            folderItem.style.paddingLeft = `${(depth * 12) + 10}px`;
+            folderItem.className = `group p-2 rounded-xl cursor-pointer text-xs flex items-center justify-between transition ${isSelected ? 'bg-brand-600 text-white font-semibold shadow-md shadow-brand-600/20' : 'text-slate-300 hover:bg-slate-800/80'}`;
+            
+            folderItem.innerHTML = `
+                <div class="flex items-center gap-2 truncate flex-1" onclick="onFolderClick('${folder.id}')">
+                    <i class="fa-solid fa-chevron-right text-[9px] w-2.5 shrink-0 transition-transform ${isExpanded ? 'rotate-90' : ''} ${hasSubfolders ? (isSelected ? 'text-white' : 'text-slate-500') : 'invisible'}"></i>
+                    <i class="fa-solid ${folder.icon || 'fa-folder'} ${folder.color ? '' : (isSelected ? 'text-white' : 'text-brand-400')}" ${folder.color ? `style="color:${folder.color}"` : ''}></i>
+                    <span class="truncate">${escapeHTML(folder.name)}</span>
+                    ${countNotesIn(folder.id) ? `<span class="text-[10px] shrink-0 ${isSelected ? 'text-white/70' : 'text-slate-500'}">${countNotesIn(folder.id)}</span>` : ''}
+                </div>
+                <div class="opacity-0 group-hover:opacity-100 flex items-center gap-1 transition">
+                    <button onclick="event.stopPropagation(); openCreateFolderModal('${folder.id}')" title="Añadir Subsección" class="p-1 hover:text-emerald-400 text-slate-400"><i class="fa-solid fa-plus text-[10px]"></i></button>
+                    <button onclick="event.stopPropagation(); deleteFolder('${folder.id}')" title="Eliminar" class="p-1 hover:text-rose-400 text-slate-400"><i class="fa-solid fa-trash-can text-[10px]"></i></button>
+                </div>
+            `;
+
+            attachLongPress(folderItem, () => openEditFolderModal(folder.id));
+            makeDropTarget(folderItem, folder.id);
+            wrapper.appendChild(folderItem);
+
+            if (hasSubfolders && isExpanded) {
+                const subContainer = document.createElement('div');
+                subContainer.className = "space-y-0.5";
+                subfolders.forEach(sub => {
+                    subContainer.appendChild(createFolderDOM(sub, depth + 1));
+                });
+                wrapper.appendChild(subContainer);
+            }
+
+            return wrapper;
+        }
+
+        function selectFolder(folderId, fromTree = false) {
+            state.currentFolderId = folderId;
+            // Si se elige desde fuera del árbol (migas, tarjetas), abrir sus ramas
+            if (folderId && !fromTree) expandAncestors(folderId);
+            renderFolderTree();
+            renderCurrentFolderView();
+            renderNotes();
+
+            // Cerrar sidebar en móvil al seleccionar (salvo que se esté desplegando una carpeta)
+            const keepOpen = fromTree && folderId && state.folders.some(f => f.parentId === folderId);
+            if (window.innerWidth < 768 && !keepOpen) {
+                document.getElementById('sidebar').classList.add('-translate-x-full');
+                document.getElementById('sidebarOverlay').classList.add('hidden');
+            }
+        }
+
+        // NAVEGAR A LA CARPETA SUPERIOR
+        function goToParentFolder() {
+            const current = state.folders.find(f => f.id === state.currentFolderId);
+            if (!current) return;
+            selectFolder(current.parentId || null);
+        }
+
+        // RENDER DE ENCABEZADO Y BREADCRUMBS
+        function renderCurrentFolderView() {
+            const currentFolder = state.folders.find(f => f.id === state.currentFolderId);
+            const breadcrumbsContainer = document.getElementById('breadcrumbs');
+            const subfoldersSection = document.getElementById('subfoldersSection');
+            const subfoldersGrid = document.getElementById('subfoldersGrid');
+
+            // Breadcrumbs
+            let breadcrumbHTML = `<span class="cursor-pointer hover:text-slate-200" onclick="selectFolder(null)">Inicio</span>`;
+            if (currentFolder) {
+                let path = [];
+                let curr = currentFolder;
+                while (curr) {
+                    path.unshift(curr);
+                    curr = state.folders.find(f => f.id === curr.parentId);
+                }
+                path.forEach((f, idx) => {
+                    breadcrumbHTML += ` <i class="fa-solid fa-chevron-right text-[9px] mx-1.5 text-slate-600"></i> `;
+                    if (idx === path.length - 1) {
+                        breadcrumbHTML += `<span class="text-brand-400 font-semibold">${escapeHTML(f.name)}</span>`;
+                    } else {
+                        breadcrumbHTML += `<span class="cursor-pointer hover:text-slate-200" onclick="selectFolder('${f.id}')">${escapeHTML(f.name)}</span>`;
+                    }
+                });
+
+                document.getElementById('currentFolderName').innerText = currentFolder.name;
+                document.getElementById('currentFolderDesc').innerText = `Sección de trabajo organizada.`;
+                document.getElementById('currentFolderIcon').className = `fa-solid ${currentFolder.icon || 'fa-folder-open'} text-xl text-brand-500`;
+                document.getElementById('currentFolderIcon').style.color = currentFolder.color || '';
+            } else if (state.currentFolderId === ORPHAN_ID) {
+                breadcrumbHTML += ` <i class="fa-solid fa-chevron-right text-[9px] mx-1.5 text-slate-600"></i> <span class="text-brand-400 font-semibold">Sin sección</span>`;
+                document.getElementById('currentFolderName').innerText = 'Sin sección';
+                document.getElementById('currentFolderDesc').innerText = 'Notas cuya sección se eliminó. Muévelas a otra sección con el icono de mover.';
+                document.getElementById('currentFolderIcon').className = 'fa-solid fa-inbox text-xl text-amber-400';
+                document.getElementById('currentFolderIcon').style.color = '';
+            } else {
+                document.getElementById('currentFolderName').innerText = 'Todas las Secciones y Notas';
+                document.getElementById('currentFolderDesc').innerText = 'Explora todas las notas guardadas';
+                document.getElementById('currentFolderIcon').className = 'fa-solid fa-layer-group text-xl text-brand-500';
+                document.getElementById('currentFolderIcon').style.color = '';
+            }
+            breadcrumbsContainer.innerHTML = breadcrumbHTML;
+            document.getElementById('backFolderBtn').classList.toggle('hidden', !currentFolder);
+
+            // Subsecciones
+            const subfolders = state.folders.filter(f => f.parentId === state.currentFolderId);
+            if (subfolders.length > 0) {
+                subfoldersSection.classList.remove('hidden');
+                subfoldersGrid.innerHTML = '';
+                subfolders.forEach(sub => {
+                    const card = document.createElement('div');
+                    card.onclick = () => selectFolder(sub.id);
+                    card.className = "bg-slate-900/60 hover:bg-slate-800 border border-slate-800 p-3 rounded-xl cursor-pointer flex items-center justify-between transition group";
+                    card.innerHTML = `
+                        <div class="flex items-center space-x-2.5 truncate">
+                            <i class="fa-solid ${sub.icon || 'fa-folder'} ${sub.color ? '' : 'text-brand-400'} group-hover:scale-110 transition-transform" ${sub.color ? `style="color:${sub.color}"` : ''}></i>
+                            <span class="text-xs font-medium text-slate-200 truncate">${escapeHTML(sub.name)}</span>
+                        </div>
+                        <i class="fa-solid fa-chevron-right text-[10px] text-slate-600 group-hover:text-slate-300"></i>
+                    `;
+                    attachLongPress(card, () => openEditFolderModal(sub.id));
+                    makeDropTarget(card, sub.id);
+                    subfoldersGrid.appendChild(card);
+                });
+            } else {
+                subfoldersSection.classList.add('hidden');
+            }
+        }
+
+        // RENDER DE NOTAS
+        function renderNotes() {
+            const grid = document.getElementById('notesGrid');
+            const emptyState = document.getElementById('emptyNotesState');
+            const searchQuery = document.getElementById('searchNotesInput').value.toLowerCase();
+
+            grid.innerHTML = '';
+
+            let filteredNotes = state.notes;
+
+            // Filtrar por carpeta activa si aplica
+            if (state.currentFolderId === ORPHAN_ID) {
+                if (!state.notes.some(isOrphanNote)) { selectFolder(null); return; }
+                filteredNotes = filteredNotes.filter(isOrphanNote);
+            } else if (state.currentFolderId !== null) {
+                filteredNotes = filteredNotes.filter(n => n.folderId === state.currentFolderId);
+            }
+
+            // Filtrar por busqueda
+            if (searchQuery) {
+                filteredNotes = filteredNotes.filter(n => 
+                    n.title.toLowerCase().includes(searchQuery) || 
+                    n.content.toLowerCase().includes(searchQuery) ||
+                    (n.attachments || []).some(a => a.name.toLowerCase().includes(searchQuery)) ||
+                    (n.links || []).some(l => (l.title + ' ' + l.url).toLowerCase().includes(searchQuery))
+                );
+            }
+
+            filteredNotes = [...filteredNotes].sort((a, b) => (b.pinned ? 1 : 0) - (a.pinned ? 1 : 0));
+
+            if (filteredNotes.length === 0) {
+                emptyState.classList.remove('hidden');
+                return;
+            } else {
+                emptyState.classList.add('hidden');
+            }
+
+            filteredNotes.forEach(note => {
+                const folder = state.folders.find(f => f.id === note.folderId);
+                const folderName = folder ? folder.name : 'Sin sección';
+
+                const card = document.createElement('div');
+                card.dataset.noteId = note.id;
+                card.draggable = true;
+                card.addEventListener('dragstart', (e) => {
+                    e.dataTransfer.setData('text/plain', note.id);
+                    e.dataTransfer.effectAllowed = 'move';
+                    window.draggedNoteId = note.id;
+                    card.classList.add('opacity-50');
+                });
+                card.addEventListener('dragend', () => { card.classList.remove('opacity-50'); window.draggedNoteId = null; });
+                card.classList.add('cursor-pointer');
+                card.onclick = (e) => { if (!e.target.closest('button, img, a')) openNoteView(note.id); };
+                card.className = "bg-slate-900 border border-slate-800 rounded-2xl p-4 flex flex-col justify-between hover:border-slate-700 transition shadow-lg space-y-3";
+                
+                const linkedReminders = (state.reminders || []).filter(r => r.noteId === note.id);
+                let remindersHTML = '';
+                if (linkedReminders.length > 0) {
+                    remindersHTML = `<div class="flex flex-col gap-1">`;
+                    linkedReminders.forEach(r => {
+                        remindersHTML += `
+                            <button onclick="goToReminder('${r.id}')" title="Ver el recordatorio" class="flex items-center gap-1.5 text-left text-[10px] text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 rounded px-1.5 py-1 transition ${r.completed ? 'opacity-60' : ''}">
+                                <i class="fa-solid fa-bell shrink-0"></i>
+                                <span class="truncate ${r.completed ? 'line-through' : ''}">${escapeHTML(r.title)}</span>
+                                <span class="ml-auto shrink-0 text-amber-400/70">${r.dueDate || ''}</span>
+                            </button>`;
+                    });
+                    remindersHTML += `</div>`;
+                }
+
+                let imagesHTML = '';
+                if (note.images && note.images.length > 0) {
+                    imagesHTML = `<div class="flex gap-1.5 overflow-x-auto py-1">`;
+                    note.images.forEach(imgData => {
+                        imagesHTML += `<img src="${imgData}" onclick="openImageViewer('${imgData}')" class="w-14 h-14 object-cover rounded-lg border border-slate-700 cursor-pointer hover:opacity-80 transition">`;
+                    });
+                    imagesHTML += `</div>`;
+                }
+
+                let docsHTML = '';
+                const noteLinks = note.links || [], noteAtts = note.attachments || [];
+                if (noteLinks.length || noteAtts.length) {
+                    docsHTML = `<div class="flex flex-wrap gap-1.5">`;
+                    noteLinks.forEach(l => {
+                        const [lIcon, lColor, lName] = linkIconInfo(l.url);
+                        docsHTML += `<a href="${escapeHTML(l.url)}" target="_blank" rel="noopener noreferrer" title="${lName ? lName + ': ' : ''}${escapeHTML(l.title)} — ${escapeHTML(l.url)}" class="flex items-center gap-1 max-w-[140px] text-[10px] text-sky-400 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 rounded px-1.5 py-1 transition"><i class="${lIcon} ${lColor} shrink-0"></i><span class="truncate">${escapeHTML(l.title)}</span></a>`;
+                    });
+                    noteAtts.forEach(a => {
+                        const [icon, color] = fileIconInfo(a.name, a.mime);
+                        docsHTML += `<button onclick="openAttachment('${note.id}','${a.id}')" title="Abrir ${escapeHTML(a.name)}" class="flex items-center gap-1 max-w-[140px] text-[10px] text-slate-300 bg-slate-800/70 border border-slate-700 hover:bg-slate-800 rounded px-1.5 py-1 transition"><i class="fa-solid ${icon} ${color} shrink-0"></i><span class="truncate">${escapeHTML(a.name)}</span></button>`;
+                    });
+                    docsHTML += `</div>`;
+                }
+
+                card.innerHTML = `
+                    <div class="space-y-2">
+                        <div class="flex items-start justify-between gap-2">
+                            <h4 class="font-semibold text-sm text-slate-100 line-clamp-1">${note.pinned ? '<i class="fa-solid fa-thumbtack text-amber-400 text-[10px] mr-1"></i>' : ''}${escapeHTML(note.title)}</h4>
+                            <div class="flex items-center gap-1 shrink-0">
+                                <button onclick="openMoveNoteModal('${note.id}')" title="Mover a otra carpeta" class="p-1 text-slate-400 hover:text-emerald-400 text-xs"><i class="fa-solid fa-arrows-up-down-left-right"></i></button>
+                                <button onclick="openNoteModal('${note.id}')" class="p-1 text-slate-400 hover:text-brand-400 text-xs"><i class="fa-solid fa-pen"></i></button>
+                                <button onclick="deleteNote('${note.id}')" class="p-1 text-slate-400 hover:text-rose-400 text-xs"><i class="fa-solid fa-trash-can"></i></button>
+                            </div>
+                        </div>
+                        <p class="text-xs text-slate-300 leading-relaxed whitespace-pre-line line-clamp-4">${escapeHTML(note.content)}</p>
+                        ${imagesHTML}
+                        ${docsHTML}
+                        ${remindersHTML}
+                    </div>
+
+                    <div class="pt-2 border-t border-slate-800/60 flex items-center justify-between text-[11px] text-slate-500">
+                        <span class="bg-slate-800/80 px-2 py-0.5 rounded text-slate-400 truncate max-w-[120px]"><i class="fa-solid fa-folder text-[9px] mr-1"></i>${escapeHTML(folderName)}</span>
+                        <span>${new Date(note.updatedAt).toLocaleDateString('es-ES')}</span>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // RENDER DE RECORDATORIOS Y TAREAS
+        let reminderFilter = 'todos';
+
+        function setReminderFilter(f) { reminderFilter = f; renderReminders(); }
+
+        function nextReminderDate(dateStr, repeat) {
+            const [y, m, d] = dateStr.split('-').map(Number);
+            let t;
+            if (repeat === 'diaria') t = new Date(y, m - 1, d + 1);
+            else if (repeat === 'semanal') t = new Date(y, m - 1, d + 7);
+            else if (repeat === 'mensual') { t = new Date(y, m, 1); t.setDate(Math.min(d, new Date(y, m + 1, 0).getDate())); }
+            else { t = new Date(y + 1, m - 1, 1); t.setDate(Math.min(d, new Date(y + 1, m, 0).getDate())); }
+            return `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`;
+        }
+
+        function renderReminders() {
+            const list = document.getElementById('remindersList');
+            const badge = document.getElementById('reminderBadgeCount');
+            list.innerHTML = '';
+
+            // Quitar enlaces a notas que ya no existen y refrescar las etiquetas de las notas
+            state.reminders.forEach(r => {
+                if (r.noteId && !state.notes.some(n => n.id === r.noteId)) delete r.noteId;
+            });
+            renderNotes();
+
+            // El contador solo cuenta los recordatorios vencidos y sin marcar
+            const today = getLocalToday();
+            const overdueReminders = state.reminders.filter(r => !r.completed && r.dueDate && r.dueDate < today);
+            if (overdueReminders.length > 0) {
+                badge.classList.remove('hidden');
+                badge.innerText = overdueReminders.length;
+            } else {
+                badge.classList.add('hidden');
+            }
+
+            if (state.reminders.length === 0) {
+                list.innerHTML = `
+                    <div class="text-center py-8 text-slate-500 text-xs">
+                        <i class="fa-solid fa-bell-slash text-2xl mb-2 block"></i>
+                        No tienes recordatorios o tareas pendientes.
+                    </div>
+                `;
+                return;
+            }
+
+            // Filtros
+            const today2 = getLocalToday();
+            const isOverdue = r => !r.completed && r.dueDate && r.dueDate < today2;
+            const filters = [['todos', 'Todos'], ['pendientes', 'Pendientes'], ['vencidos', 'Vencidos'], ['hechos', 'Hechos']];
+            document.getElementById('reminderFilters').innerHTML = filters.map(([k, label]) => `
+                <button onclick="setReminderFilter('${k}')" class="text-[11px] px-3 py-1.5 rounded-lg border transition ${reminderFilter === k ? 'bg-amber-500/15 text-amber-400 border-amber-500/30 font-semibold' : 'bg-slate-900 text-slate-400 border-slate-800 hover:text-slate-200'}">${label}</button>`).join('');
+
+            let visible = state.reminders.filter(r =>
+                reminderFilter === 'todos' ? true :
+                reminderFilter === 'pendientes' ? !r.completed :
+                reminderFilter === 'vencidos' ? isOverdue(r) : r.completed);
+            // Orden: pendientes primero, por fecha (sin fecha al final); hechos al final
+            visible.sort((a, b) => (a.completed - b.completed) || ((a.dueDate || '9999') + (a.time || '')).localeCompare((b.dueDate || '9999') + (b.time || '')));
+            if (visible.length === 0) {
+                list.innerHTML = '<div class="text-center py-8 text-slate-500 text-xs">No hay recordatorios con este filtro.</div>';
+                return;
+            }
+
+            visible.forEach(r => {
+                const overdue = isOverdue(r);
+                const priorityColor = r.priority === 'alta' ? 'text-rose-400 bg-rose-500/10 border-rose-500/20' : (r.priority === 'media' ? 'text-amber-400 bg-amber-500/10 border-amber-500/20' : 'text-emerald-400 bg-emerald-500/10 border-emerald-500/20');
+
+                const linkedNote = r.noteId ? state.notes.find(n => n.id === r.noteId) : null;
+                const noteChipHTML = linkedNote ? `
+                            <button onclick="goToNoteFromReminder('${linkedNote.id}')" title="Abrir la nota relacionada" class="mt-1 inline-flex items-center gap-1 max-w-[200px] text-[10px] text-brand-400 bg-brand-500/10 border border-brand-500/20 hover:bg-brand-500/20 rounded px-1.5 py-0.5 transition">
+                                <i class="fa-regular fa-note-sticky"></i><span class="truncate">${escapeHTML(linkedNote.title)}</span>
+                            </button>` : '';
+
+                const item = document.createElement('div');
+                item.dataset.reminderId = r.id;
+                item.className = `bg-slate-900 border ${overdue ? 'border-rose-500/40' : 'border-slate-800'} p-3.5 rounded-2xl flex items-center justify-between gap-3 ${r.completed ? 'opacity-50' : ''}`;
+                item.innerHTML = `
+                    <div class="flex items-center gap-3">
+                        <input type="checkbox" ${r.completed ? 'checked' : ''} onchange="toggleReminder('${r.id}')" class="w-4 h-4 rounded border-slate-700 bg-slate-950 text-amber-500 focus:ring-0">
+                        <div>
+                            <p class="text-xs font-medium text-slate-200 ${r.completed ? 'line-through' : ''}">${escapeHTML(r.title)}</p>
+                            <span class="text-[10px] ${overdue ? 'text-rose-400 font-semibold' : 'text-slate-500'} flex items-center gap-1.5 mt-0.5">
+                                <i class="fa-regular fa-calendar"></i> Límite: ${r.dueDate || 'Sin fecha'}${r.time ? ' · ' + r.time : ''}${overdue ? ' · Vencido' : ''}${r.repeat ? ` · <i class="fa-solid fa-rotate"></i> ${r.repeat}` : ''}
+                            </span>
+                            ${noteChipHTML}
+                        </div>
+                    </div>
+                    <div class="flex items-center gap-2">
+                        <span class="text-[10px] uppercase font-semibold px-2 py-0.5 rounded border ${priorityColor}">${r.priority}</span>
+                        <button onclick="openReminderModal('${r.id}')" title="Editar fecha y datos" class="text-slate-500 hover:text-amber-400 text-xs p-1"><i class="fa-solid fa-pen"></i></button>
+                        <button onclick="addReminderToGoogleCalendar('${r.id}')" title="${r.gcalAdded ? 'Ya añadido a Google Calendar (pulsa para volver a añadir)' : 'Añadir a Google Calendar'}" class="${r.gcalAdded ? 'text-brand-400' : 'text-slate-500'} hover:text-brand-400 text-xs p-1"><i class="fa-regular fa-calendar-plus"></i></button>
+                        <button onclick="deleteReminder('${r.id}')" class="text-slate-500 hover:text-rose-400 text-xs p-1"><i class="fa-solid fa-trash-can"></i></button>
+                    </div>
+                `;
+                list.appendChild(item);
+            });
+        }
+
+        // LÓGICA DE GESTIÓN DE CARPETAS / SECCIONES
+        // COLORES DE ICONO DE CARPETA ('' = color por defecto del programa)
+        const FOLDER_COLORS = [
+            { value: '',        hex: '#38bdf8', name: 'Azul (por defecto)' },
+            { value: '#34d399', hex: '#34d399', name: 'Verde' },
+            { value: '#fbbf24', hex: '#fbbf24', name: 'Amarillo' },
+            { value: '#fb923c', hex: '#fb923c', name: 'Naranja' },
+            { value: '#fb7185', hex: '#fb7185', name: 'Rojo' },
+            { value: '#f472b6', hex: '#f472b6', name: 'Rosa' },
+            { value: '#a78bfa', hex: '#a78bfa', name: 'Violeta' },
+            { value: '#2dd4bf', hex: '#2dd4bf', name: 'Turquesa' },
+            { value: '#94a3b8', hex: '#94a3b8', name: 'Gris' }
+        ];
+
+        function renderFolderColorPicker() {
+            const box = document.getElementById('folderColorPicker');
+            const selected = document.getElementById('folderColorValue').value || '';
+            box.innerHTML = '';
+            FOLDER_COLORS.forEach(c => {
+                const b = document.createElement('button');
+                b.type = 'button';
+                b.title = c.name;
+                b.style.backgroundColor = c.hex;
+                b.className = `w-7 h-7 rounded-full border border-slate-700 transition hover:scale-110 ${selected === c.value ? 'ring-2 ring-white ring-offset-2 ring-offset-slate-900' : ''}`;
+                b.onclick = () => {
+                    document.getElementById('folderColorValue').value = c.value;
+                    renderFolderColorPicker();
+                };
+                box.appendChild(b);
+            });
+        }
+
+        function setFolderModalTitle(text, iconClass) {
+            document.getElementById('folderModalTitle').innerHTML = `<i class="fa-solid ${iconClass} text-brand-500"></i> ${text}`;
+        }
+
+        function openCreateFolderModal(parentId = null) {
+            setFolderModalTitle(parentId ? 'Nueva Subsección' : 'Nueva Sección', 'fa-folder-plus');
+            document.getElementById('folderParentId').value = parentId || '';
+            document.getElementById('folderEditId').value = '';
+            document.getElementById('folderNameInput').value = '';
+            document.getElementById('folderIconSelect').value = 'fa-folder';
+            document.getElementById('folderColorValue').value = '';
+            document.getElementById('folderSaveBtn').innerText = 'Guardar Sección';
+            renderFolderColorPicker();
+            document.getElementById('folderModal').classList.remove('hidden');
+        }
+
+        // EDITAR NOMBRE / ICONO / COLOR DE UNA CARPETA (mantener pulsada)
+        function openEditFolderModal(folderId) {
+            const folder = state.folders.find(f => f.id === folderId);
+            if (!folder) return;
+            setFolderModalTitle(folder.parentId ? 'Editar Subsección' : 'Editar Sección', 'fa-pen');
+            document.getElementById('folderParentId').value = folder.parentId || '';
+            document.getElementById('folderEditId').value = folder.id;
+            document.getElementById('folderNameInput').value = folder.name;
+            document.getElementById('folderIconSelect').value = folder.icon || 'fa-folder';
+            document.getElementById('folderColorValue').value = folder.color || '';
+            document.getElementById('folderSaveBtn').innerText = 'Guardar Cambios';
+            renderFolderColorPicker();
+            document.getElementById('folderModal').classList.remove('hidden');
+        }
+
+        // Detecta "dejar pulsado" (dedo o ratón) sobre un elemento
+        function attachLongPress(el, callback, ms = 500) {
+            let timer = null, startX = 0, startY = 0;
+            const cancel = () => { clearTimeout(timer); timer = null; };
+
+            el.addEventListener('pointerdown', (e) => {
+                if (e.target.closest('button')) return;
+                startX = e.clientX; startY = e.clientY;
+                cancel();
+                timer = setTimeout(() => {
+                    timer = null;
+                    el._longPressFired = true;
+                    if (navigator.vibrate) navigator.vibrate(30);
+                    callback();
+                }, ms);
+            });
+            el.addEventListener('pointermove', (e) => {
+                if (timer && (Math.abs(e.clientX - startX) > 10 || Math.abs(e.clientY - startY) > 10)) cancel();
+            });
+            ['pointerup', 'pointerleave', 'pointercancel'].forEach(ev => el.addEventListener(ev, cancel));
+            // Evita el menú contextual del móvil al mantener pulsado
+            el.addEventListener('contextmenu', (e) => e.preventDefault());
+            // Si se activó la pulsación larga, ignorar el clic que viene después
+            el.addEventListener('click', (e) => {
+                if (el._longPressFired) {
+                    el._longPressFired = false;
+                    e.stopImmediatePropagation();
+                    e.preventDefault();
+                }
+            }, true);
+        }
+
+        function saveFolder() {
+            const name = document.getElementById('folderNameInput').value.trim();
+            const parentId = document.getElementById('folderParentId').value || null;
+            const icon = document.getElementById('folderIconSelect').value;
+            const color = document.getElementById('folderColorValue').value;
+            const editId = document.getElementById('folderEditId').value;
+
+            if (!name) return;
+
+            if (editId) {
+                const folder = state.folders.find(f => f.id === editId);
+                if (folder) {
+                    folder.name = name;
+                    folder.icon = icon;
+                    if (color) folder.color = color; else delete folder.color;
+                }
+            } else {
+                const newFolder = {
+                    id: 'f-' + Date.now(),
+                    name: name,
+                    parentId: parentId,
+                    icon: icon
+                };
+                if (color) newFolder.color = color;
+                state.folders.push(newFolder);
+                if (parentId) { expandedFolders.add(parentId); saveExpanded(); }
+            }
+
+            saveStateToStorage();
+            closeModal('folderModal');
+            renderFolderTree();
+            renderCurrentFolderView();
+            renderNotes();
+            renderReminders();
+        }
+
+        // CONFIRMACIÓN DE ELIMINACIÓN (pop-up)
+        let pendingConfirmAction = null;
+
+        function askConfirm(title, message, onConfirm, acceptLabel = 'Sí, eliminar') {
+            pendingConfirmAction = onConfirm;
+            document.getElementById('confirmAcceptBtn').innerText = acceptLabel;
+            document.getElementById('confirmModalTitle').innerText = title;
+            document.getElementById('confirmModalMessage').innerText = message;
+            document.getElementById('confirmModal').classList.remove('hidden');
+        }
+
+        function cancelConfirm() {
+            pendingConfirmAction = null;
+            document.getElementById('confirmModal').classList.add('hidden');
+        }
+
+        function acceptConfirm() {
+            const action = pendingConfirmAction;
+            cancelConfirm();
+            if (action) action();
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !document.getElementById('confirmModal').classList.contains('hidden')) cancelConfirm();
+            else if (e.key === 'Escape' && !document.getElementById('imageViewerModal').classList.contains('hidden')) closeImageViewer();
+        });
+
+        function deleteFolder(folderId) {
+            const folder = state.folders.find(f => f.id === folderId);
+            if (!folder) return;
+            // Recuento exacto de lo que se borra y de lo que se conserva
+            const directSubs = state.folders.filter(f => f.parentId === folderId);
+            const descIds = new Set();
+            (function collect(id) { state.folders.filter(f => f.parentId === id).forEach(f => { descIds.add(f.id); collect(f.id); }); })(folderId);
+            const ownNotes = state.notes.filter(n => n.folderId === folderId).length;
+            const keptNotes = state.notes.filter(n => descIds.has(n.folderId)).length;
+            const deeper = descIds.size - directSubs.length;
+            const pl = (n, one, many) => `${n} ${n === 1 ? one : many}`;
+
+            const lines = [`Se eliminará la sección "${folder.name}".`];
+            const alsoDeleted = [];
+            if (directSubs.length) alsoDeleted.push(`• ${pl(directSubs.length, 'subsección directa', 'subsecciones directas')}`);
+            if (ownNotes) alsoDeleted.push(`• ${pl(ownNotes, 'nota que está', 'notas que están')} directamente en esta sección`);
+            if (alsoDeleted.length) lines.push('También se borrarán:', ...alsoDeleted);
+            if (keptNotes) lines.push(`${keptNotes === 1 ? 'La nota que está' : `Las ${keptNotes} notas que están`} dentro de sus subsecciones NO se ${keptNotes === 1 ? 'borra' : 'borran'}: ${keptNotes === 1 ? 'la' : 'las'} encontrarás en "Sin sección", en el menú lateral.`);
+            if (deeper > 0) lines.push(`${pl(deeper, 'subsección de un nivel inferior no se borra', 'subsecciones de niveles inferiores no se borran')}, pero dejará${deeper === 1 ? '' : 'n'} de verse en el menú lateral.`);
+            lines.push('Esta acción no se puede deshacer.');
+
+            askConfirm('¿Eliminar sección?', lines.join('\n'), () => {
+                state.folders = state.folders.filter(f => f.id !== folderId && f.parentId !== folderId);
+                state.notes = state.notes.filter(n => n.folderId !== folderId);
+                if (state.currentFolderId === folderId) state.currentFolderId = null;
+                saveStateToStorage();
+                renderFolderTree();
+                renderCurrentFolderView();
+                renderNotes();
+            });
+        }
+
+        function updateFolderSelectOptions() {
+            const select = document.getElementById('noteFolderSelect');
+            select.innerHTML = '';
+            state.folders.forEach(f => {
+                const opt = document.createElement('option');
+                opt.value = f.id;
+                opt.innerText = f.name;
+                select.appendChild(opt);
+            });
+        }
+
+        // LÓGICA DE GESTIÓN DE NOTAS CON IMÁGENES
+        function openNoteModal(noteId = null) {
+            state.tempNoteImages = [];
+            const container = document.getElementById('imagePreviewContainer');
+            container.innerHTML = '';
+
+            if (noteId) {
+                const note = state.notes.find(n => n.id === noteId);
+                document.getElementById('noteModalTitle').innerText = 'Editar Nota';
+                document.getElementById('noteEditId').value = note.id;
+                document.getElementById('noteTitleInput').value = note.title;
+                document.getElementById('noteContentInput').value = note.content;
+                document.getElementById('noteFolderSelect').value = note.folderId;
+                document.getElementById('notePinnedInput').checked = !!note.pinned;
+                state.tempNoteImages = note.images ? [...note.images] : [];
+                tempAttachments = (note.attachments || []).map(a => ({ ...a }));
+                tempLinks = (note.links || []).map(l => ({ ...l }));
+            } else {
+                tempAttachments = [];
+                tempLinks = [];
+                document.getElementById('noteModalTitle').innerText = 'Nueva Nota';
+                document.getElementById('noteEditId').value = '';
+                document.getElementById('noteTitleInput').value = '';
+                document.getElementById('noteContentInput').value = '';
+                document.getElementById('notePinnedInput').checked = false;
+                if (state.currentFolderId && state.folders.some(f => f.id === state.currentFolderId)) {
+                    document.getElementById('noteFolderSelect').value = state.currentFolderId;
+                }
+            }
+
+            cancelLinkEdit();
+            editingAttId = null;
+            renderImagePreviews();
+            renderTempAttachments();
+            renderTempLinks();
+            renderNoteReminderChecklist(noteId);
+            document.getElementById('noteModal').classList.remove('hidden');
+        }
+
+        // MOVER NOTAS ENTRE CARPETAS
+        function showToast(text) {
+            const t = document.createElement('div');
+            t.className = 'fixed bottom-24 md:bottom-6 left-1/2 -translate-x-1/2 z-[70] bg-slate-800 border border-slate-700 text-slate-100 text-xs px-4 py-2 rounded-xl shadow-2xl flex items-center gap-2';
+            t.innerHTML = `<i class="fa-solid fa-circle-check text-emerald-400"></i><span></span>`;
+            t.lastChild.innerText = text;
+            document.body.appendChild(t);
+            setTimeout(() => t.remove(), 2200);
+        }
+
+        function moveNote(noteId, folderId) {
+            const note = state.notes.find(n => n.id === noteId);
+            const folder = state.folders.find(f => f.id === folderId);
+            if (!note || !folder || note.folderId === folderId) return;
+            note.folderId = folderId;
+            saveStateToStorage();
+            renderFolderTree();
+            renderCurrentFolderView();
+            renderNotes();
+            showToast(`Nota movida a "${folder.name}"`);
+        }
+
+        function openMoveNoteModal(noteId) {
+            const note = state.notes.find(n => n.id === noteId);
+            if (!note) return;
+            document.getElementById('moveNoteTitle').innerText = note.title;
+            const box = document.getElementById('moveNoteList');
+            box.innerHTML = '';
+            const add = (parentId, depth) => {
+                state.folders.filter(f => f.parentId === parentId).forEach(f => {
+                    const isCur = f.id === note.folderId;
+                    const row = document.createElement('button');
+                    row.className = `w-full text-left p-2 rounded-xl text-xs flex items-center gap-2 transition ${isCur ? 'bg-brand-600/20 text-brand-400 border border-brand-500/30 cursor-default' : 'text-slate-300 hover:bg-slate-800'}`;
+                    row.style.paddingLeft = `${depth * 14 + 10}px`;
+                    row.innerHTML = `<i class="fa-solid ${f.icon || 'fa-folder'} ${f.color ? '' : 'text-brand-400'}" ${f.color ? `style="color:${f.color}"` : ''}></i><span class="truncate flex-1">${escapeHTML(f.name)}</span>${isCur ? '<span class="text-[10px]">Actual</span>' : ''}`;
+                    if (!isCur) row.onclick = () => { closeModal('moveNoteModal'); moveNote(noteId, f.id); };
+                    box.appendChild(row);
+                    add(f.id, depth + 1);
+                });
+            };
+            add(null, 0);
+            document.getElementById('moveNoteModal').classList.remove('hidden');
+        }
+
+        // Soltar una nota arrastrada sobre una carpeta
+        function makeDropTarget(el, folderId) {
+            const on = 'ring-2 ring-emerald-400';
+            el.addEventListener('dragover', (e) => { if (!window.draggedNoteId) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; el.classList.add(...on.split(' ')); });
+            el.addEventListener('dragleave', () => el.classList.remove(...on.split(' ')));
+            el.addEventListener('drop', (e) => {
+                e.preventDefault();
+                el.classList.remove(...on.split(' '));
+                const id = e.dataTransfer.getData('text/plain') || window.draggedNoteId;
+                if (id) moveNote(id, folderId);
+            });
+        }
+
+        // VISTA COMPLETA DE UNA NOTA
+        function openNoteView(noteId) {
+            const note = state.notes.find(n => n.id === noteId);
+            if (!note) return;
+            document.getElementById('noteViewTitle').innerText = note.title;
+            document.getElementById('noteViewMeta').innerText = `${getFolderPathText(note.folderId) || 'Sin sección'} · ${new Date(note.updatedAt).toLocaleDateString('es-ES')}`;
+            document.getElementById('noteViewBody').innerText = note.content || '';
+            const imgs = document.getElementById('noteViewImages');
+            imgs.innerHTML = '';
+            (note.images || []).forEach(src => {
+                const im = document.createElement('img');
+                im.src = src;
+                im.className = 'w-24 h-24 object-cover rounded-lg border border-slate-700 cursor-pointer hover:opacity-80 transition';
+                im.onclick = () => openImageViewer(src);
+                imgs.appendChild(im);
+            });
+            const docsBox = document.getElementById('noteViewDocs');
+            docsBox.innerHTML = '';
+            (note.attachments || []).forEach(a => {
+                const [icon, color] = fileIconInfo(a.name, a.mime);
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2';
+                row.innerHTML = `
+                    <i class="fa-solid ${icon} ${color} shrink-0"></i>
+                    <button type="button" onclick="openAttachment('${note.id}','${a.id}')" class="flex-1 min-w-0 text-left text-xs text-slate-200 hover:text-brand-400 truncate" title="Abrir">${escapeHTML(a.name)}</button>
+                    <span class="text-[10px] text-slate-500 shrink-0">${formatSize(a.size)}</span>
+                    <button type="button" onclick="openAttachment('${note.id}','${a.id}')" title="Abrir" class="p-1.5 text-slate-400 hover:text-brand-400 text-xs shrink-0"><i class="fa-solid fa-up-right-from-square"></i></button>
+                    <button type="button" onclick="openAttachment('${note.id}','${a.id}', true)" title="Descargar" class="p-1.5 text-slate-400 hover:text-emerald-400 text-xs shrink-0"><i class="fa-solid fa-download"></i></button>`;
+                docsBox.appendChild(row);
+            });
+            const linksBox = document.getElementById('noteViewLinks');
+            linksBox.innerHTML = '';
+            (note.links || []).forEach(l => {
+                const a = document.createElement('a');
+                a.href = l.url; a.target = '_blank'; a.rel = 'noopener noreferrer';
+                a.className = 'flex items-center gap-2 text-xs text-sky-400 bg-sky-500/10 border border-sky-500/20 hover:bg-sky-500/20 rounded-xl px-2.5 py-2 transition';
+                const [lIcon, lColor, lName] = linkIconInfo(l.url);
+                a.innerHTML = `<i class="${lIcon} ${lColor} shrink-0"></i><span class="truncate">${escapeHTML(l.title)}</span>${lName ? `<span class="text-[10px] text-slate-400 shrink-0">${lName}</span>` : ''}<span class="ml-auto text-[10px] text-sky-400/60 truncate max-w-[45%]">${escapeHTML(l.url)}</span><i class="fa-solid fa-arrow-up-right-from-square text-[10px] shrink-0"></i>`;
+                linksBox.appendChild(a);
+            });
+            const rem = document.getElementById('noteViewReminders');
+            rem.innerHTML = '';
+            state.reminders.filter(r => r.noteId === note.id).forEach(r => {
+                const b = document.createElement('button');
+                b.className = `flex items-center gap-1.5 text-left text-[11px] text-amber-400 bg-amber-500/10 border border-amber-500/20 hover:bg-amber-500/20 rounded px-2 py-1 transition ${r.completed ? 'opacity-60' : ''}`;
+                b.innerHTML = `<i class="fa-solid fa-bell"></i><span class="truncate ${r.completed ? 'line-through' : ''}">${escapeHTML(r.title)}</span><span class="ml-auto text-amber-400/70">${r.dueDate || ''}</span>`;
+                b.onclick = () => { closeModal('noteViewModal'); goToReminder(r.id); };
+                rem.appendChild(b);
+            });
+            document.getElementById('noteViewMoveBtn').onclick = () => { closeModal('noteViewModal'); openMoveNoteModal(note.id); };
+            document.getElementById('noteViewEditBtn').onclick = () => { closeModal('noteViewModal'); openNoteModal(note.id); };
+            document.getElementById('noteViewModal').classList.remove('hidden');
+        }
+
+        // ENLACE NOTA <-> RECORDATORIO (se guarda en el recordatorio: reminder.noteId)
+        function renderNoteReminderChecklist(noteId) {
+            const box = document.getElementById('noteRemindersList');
+            box.innerHTML = '';
+            if (!state.reminders || state.reminders.length === 0) {
+                box.innerHTML = '<p class="text-[11px] text-slate-500 p-1">Aún no hay recordatorios. Créalos desde la pestaña Recordatorios.</p>';
+                return;
+            }
+            state.reminders.forEach(r => {
+                const other = (r.noteId && r.noteId !== noteId) ? state.notes.find(n => n.id === r.noteId) : null;
+                const row = document.createElement('label');
+                row.className = 'flex items-center gap-2 text-xs text-slate-300 cursor-pointer p-1 rounded-lg hover:bg-slate-900';
+                row.innerHTML = `
+                    <input type="checkbox" data-rid="${r.id}" ${noteId && r.noteId === noteId ? 'checked' : ''} class="w-4 h-4 rounded border-slate-700 bg-slate-950 text-amber-500 focus:ring-0">
+                    <i class="fa-solid fa-bell text-amber-500 text-[10px]"></i>
+                    <span class="truncate flex-1 ${r.completed ? 'line-through opacity-60' : ''}">${escapeHTML(r.title)}</span>
+                    <span class="text-[10px] text-slate-500 shrink-0">${r.dueDate || ''}</span>
+                    ${other ? `<span class="text-[10px] text-slate-500 truncate max-w-[80px]" title="Ya vinculado a otra nota; se moverá a esta">→ ${escapeHTML(other.title)}</span>` : ''}
+                `;
+                box.appendChild(row);
+            });
+        }
+
+        function goToNoteFromReminder(noteId) {
+            switchMainTab('notes');
+            openNoteFromSearch(noteId);
+        }
+
+        function goToReminder(reminderId) {
+            switchMainTab('reminders');
+            setTimeout(() => {
+                const card = document.querySelector(`[data-reminder-id="${reminderId}"]`);
+                if (card) {
+                    card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    card.classList.add('ring-2', 'ring-amber-500');
+                    setTimeout(() => card.classList.remove('ring-2', 'ring-amber-500'), 2000);
+                }
+            }, 50);
+        }
+
+        // Reduce las fotos (máx. 1280 px, JPEG 75 %) para ocupar mucho menos espacio
+        function compressImage(file, cb) {
+            const fr = new FileReader();
+            fr.onload = e => {
+                const img = new Image();
+                img.onload = () => {
+                    const sc = Math.min(1, 1280 / Math.max(img.width, img.height));
+                    const c = document.createElement('canvas');
+                    c.width = Math.round(img.width * sc); c.height = Math.round(img.height * sc);
+                    const ctx = c.getContext('2d');
+                    ctx.fillStyle = '#fff'; ctx.fillRect(0, 0, c.width, c.height);
+                    ctx.drawImage(img, 0, 0, c.width, c.height);
+                    cb(c.toDataURL('image/jpeg', 0.75));
+                };
+                img.onerror = () => cb(e.target.result);
+                img.src = e.target.result;
+            };
+            fr.readAsDataURL(file);
+        }
+
+        function handleImageUpload(e) {
+            const files = e.target.files;
+            if (!files) return;
+
+            Array.from(files).forEach(file => {
+                compressImage(file, dataUrl => {
+                    state.tempNoteImages.push(dataUrl);
+                    renderImagePreviews();
+                });
+            });
+        }
+
+        function renderImagePreviews() {
+            const container = document.getElementById('imagePreviewContainer');
+            container.innerHTML = '';
+            state.tempNoteImages.forEach((imgData, index) => {
+                const box = document.createElement('div');
+                box.className = "relative group w-16 h-16 rounded-lg overflow-hidden border border-slate-700";
+                box.innerHTML = `
+                    <img src="${imgData}" class="w-full h-full object-cover">
+                    <button onclick="removeTempImage(${index})" class="absolute top-0.5 right-0.5 bg-rose-600/80 text-white w-4 h-4 rounded-full text-[9px] flex items-center justify-center"><i class="fa-solid fa-xmark"></i></button>
+                `;
+                container.appendChild(box);
+            });
+        }
+
+        function removeTempImage(index) {
+            askConfirm('¿Eliminar foto?', '¿Seguro que quieres quitar esta foto de la nota? Esta acción no se puede deshacer.', () => {
+                state.tempNoteImages.splice(index, 1);
+                renderImagePreviews();
+            });
+        }
+
+        function saveNote() {
+            const title = document.getElementById('noteTitleInput').value.trim();
+            const content = document.getElementById('noteContentInput').value.trim();
+            const folderId = document.getElementById('noteFolderSelect').value;
+            const noteEditId = document.getElementById('noteEditId').value;
+            const pinned = document.getElementById('notePinnedInput').checked;
+
+            if (!title) return;
+
+            // Si hay un enlace escrito y sin añadir, se añade al guardar
+            if (document.getElementById('noteLinkUrlInput').value.trim()) {
+                const pendingUrl = normalizeUrl(document.getElementById('noteLinkUrlInput').value);
+                if (!pendingUrl) { alert('La dirección web escrita no es válida. Corrígela o bórrala para guardar.'); return; }
+                addTempLink();
+            }
+
+            let savedNoteId = noteEditId;
+            if (noteEditId) {
+                const note = state.notes.find(n => n.id === noteEditId);
+                note.title = title;
+                note.content = content;
+                note.folderId = folderId;
+                note.images = state.tempNoteImages;
+                note.attachments = tempAttachments;
+                note.links = tempLinks;
+                note.pinned = pinned;
+                note.updatedAt = new Date().toISOString();
+            } else {
+                const newNote = {
+                    id: 'n-' + Date.now(),
+                    folderId: folderId,
+                    title: title,
+                    content: content,
+                    images: state.tempNoteImages,
+                    attachments: tempAttachments,
+                    links: tempLinks,
+                    pinned: pinned,
+                    updatedAt: new Date().toISOString()
+                };
+                state.notes.push(newNote);
+                savedNoteId = newNote.id;
+            }
+
+            // Aplicar los recordatorios marcados como relacionados con esta nota
+            document.querySelectorAll('#noteRemindersList input[data-rid]').forEach(cb => {
+                const r = state.reminders.find(x => x.id === cb.dataset.rid);
+                if (!r) return;
+                if (cb.checked) r.noteId = savedNoteId;
+                else if (r.noteId === savedNoteId) delete r.noteId;
+            });
+
+            saveStateToStorage();
+            closeModal('noteModal');
+            renderReminders();
+            renderNotes();
+            updateStatsCounters();
+        }
+
+        function deleteNote(noteId) {
+            const note = state.notes.find(n => n.id === noteId);
+            if (!note) return;
+            askConfirm('¿Eliminar nota?', `¿Seguro que quieres eliminar la nota "${note.title}"? Esta acción no se puede deshacer.`, () => {
+                state.notes = state.notes.filter(n => n.id !== noteId);
+                state.reminders.forEach(r => { if (r.noteId === noteId) delete r.noteId; });
+                saveStateToStorage();
+                renderReminders();
+                renderNotes();
+                updateStatsCounters();
+            });
+        }
+
+        // ADJUNTOS (documentos) Y ENLACES WEB DE LAS NOTAS
+        const MAX_ATTACH_BYTES = 10 * 1024 * 1024;
+        let tempAttachments = [];
+        let tempLinks = [];
+
+        function fileIconInfo(name, mime) {
+            const ext = (name.split('.').pop() || '').toLowerCase();
+            if (ext === 'pdf' || mime === 'application/pdf') return ['fa-file-pdf', 'text-rose-400'];
+            if (['doc', 'docx', 'odt', 'rtf'].includes(ext)) return ['fa-file-word', 'text-sky-400'];
+            if (['xls', 'xlsx', 'csv', 'ods'].includes(ext)) return ['fa-file-excel', 'text-emerald-400'];
+            if (['ppt', 'pptx', 'odp'].includes(ext)) return ['fa-file-powerpoint', 'text-orange-400'];
+            if (['zip', 'rar', '7z'].includes(ext)) return ['fa-file-zipper', 'text-amber-400'];
+            if ((mime || '').startsWith('image/')) return ['fa-file-image', 'text-violet-400'];
+            if (['txt', 'md', 'log'].includes(ext) || (mime || '').startsWith('text/')) return ['fa-file-lines', 'text-slate-300'];
+            return ['fa-file', 'text-slate-400'];
+        }
+
+        // Reconoce la nube por la dirección: devuelve [clases del icono, color, nombre]
+        function linkIconInfo(url) {
+            let h = '';
+            try { h = new URL(url).hostname.toLowerCase(); } catch (e) {}
+            const is = d => h === d || h.endsWith('.' + d);
+            if (is('drive.google.com') || is('docs.google.com')) return ['fa-brands fa-google-drive', 'text-emerald-400', 'Google Drive'];
+            if (is('1drv.ms') || is('onedrive.live.com') || is('onedrive.com') || is('sharepoint.com')) return ['fa-solid fa-cloud', 'text-blue-400', 'OneDrive'];
+            return ['fa-solid fa-link', '', ''];
+        }
+
+        function formatSize(b) {
+            if (b < 1024) return b + ' B';
+            if (b < 1024 * 1024) return Math.round(b / 1024) + ' KB';
+            return (b / 1024 / 1024).toFixed(1) + ' MB';
+        }
+
+        function normalizeUrl(raw) {
+            let u = (raw || '').trim();
+            if (!u) return null;
+            if (!/^https?:\/\//i.test(u)) {
+                if (/^[a-z][a-z0-9+.-]*:\/\//i.test(u)) return null;
+                u = 'https://' + u;
+            }
+            try {
+                const p = new URL(u);
+                if (!['http:', 'https:'].includes(p.protocol) || !p.hostname.includes('.')) return null;
+                return p.href;
+            } catch (e) { return null; }
+        }
+
+        function dataUrlToBlob(dataUrl) {
+            const idx = dataUrl.indexOf(',');
+            const mime = (dataUrl.substring(5, idx).split(';')[0]) || 'application/octet-stream';
+            const bin = atob(dataUrl.substring(idx + 1));
+            const arr = new Uint8Array(bin.length);
+            for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+            return new Blob([arr], { type: mime });
+        }
+
+        // ===== VISOR DE PDF (PDF.js) =====
+        let pdfv = { doc: null, zoom: 1, att: null, token: 0 };
+
+        async function openPdfViewer(att) {
+            const pages = document.getElementById('pdfViewerPages');
+            document.getElementById('pdfViewerTitle').innerText = att.name;
+            document.getElementById('pdfViewerInfo').innerText = '';
+            pages.innerHTML = '<p class="text-xs text-slate-400 py-10">Cargando PDF…</p>';
+            document.getElementById('pdfViewerModal').classList.remove('hidden');
+            pdfv.att = att; pdfv.zoom = 1; pdfv.doc = null;
+            const bytes = (() => {
+                const idx = att.data.indexOf(',');
+                const bin = atob(att.data.substring(idx + 1));
+                const arr = new Uint8Array(bin.length);
+                for (let i = 0; i < bin.length; i++) arr[i] = bin.charCodeAt(i);
+                return arr;
+            });
+            let lastErr = null;
+            // Intento 1: PDF.js normal. Intento 2: con el motor descargado y creado como "blob" (sirve cuando el programa se abre desde un archivo local)
+            for (const mode of ['normal', 'blob']) {
+                try {
+                    const params = { data: bytes() };
+                    if (mode === 'blob') {
+                        const r = await fetch(pdfjsLib.GlobalWorkerOptions.workerSrc);
+                        const txt = await r.text();
+                        const wurl = URL.createObjectURL(new Blob([txt], { type: 'text/javascript' }));
+                        params.worker = new pdfjsLib.PDFWorker({ port: new Worker(wurl) });
+                    }
+                    pdfv.doc = await pdfjsLib.getDocument(params).promise;
+                    document.getElementById('pdfViewerInfo').innerText = pdfv.doc.numPages + (pdfv.doc.numPages === 1 ? ' página' : ' páginas') + ' · ' + formatSize(att.size);
+                    renderPdfPages();
+                    return;
+                } catch (e) { lastErr = e; }
+            }
+            const detail = escapeHTML(String((lastErr && (lastErr.name + ': ' + lastErr.message)) || lastErr || 'error desconocido'));
+            pages.innerHTML = `<div class="py-10 px-4 text-center space-y-3">
+                <p class="text-xs text-rose-300">No se pudo mostrar este PDF dentro del programa.</p>
+                <button onclick="pdfvShare()" class="px-4 py-2 text-xs bg-brand-600 hover:bg-brand-500 text-white font-medium rounded-xl"><i class="fa-solid fa-share-nodes mr-1"></i> Abrir con otra app</button>
+                <p class="text-[10px] text-slate-500 break-words">${detail}</p></div>`;
+        }
+
+        // Entrega el PDF a otra aplicación del móvil (visor de PDF, Drive, etc.) o lo descarga si no se puede
+        async function pdfvShare() {
+            const att = pdfv.att; if (!att) return;
+            try {
+                const blob = dataUrlToBlob(att.data);
+                const f = new File([blob], att.name || 'documento.pdf', { type: 'application/pdf' });
+                if (navigator.canShare && navigator.canShare({ files: [f] })) {
+                    await navigator.share({ files: [f], title: att.name });
+                    return;
+                }
+            } catch (e) { if (e && e.name === 'AbortError') return; }
+            openAttachmentObj(att, true);
+        }
+
+        async function renderPdfPages(afterLayout) {
+            const doc = pdfv.doc; if (!doc) return;
+            const token = ++pdfv.token;
+            const pages = document.getElementById('pdfViewerPages');
+            const baseW = document.getElementById('pdfViewerScroll').clientWidth - 16;
+            const dpr = Math.min(window.devicePixelRatio || 1, 2);
+            document.getElementById('pdfZoomLabel').innerText = Math.round(pdfv.zoom * 100) + '%';
+            // 1) calcula el tamaño de todas las páginas (así el desplazamiento es estable)
+            const items = [];
+            for (let n = 1; n <= doc.numPages; n++) {
+                const page = await doc.getPage(n);
+                if (token !== pdfv.token) return;
+                const w1 = page.getViewport({ scale: 1 }).width;
+                const vp = page.getViewport({ scale: (baseW * pdfv.zoom / w1) * dpr });
+                const c = document.createElement('canvas');
+                c.style.width = (vp.width / dpr) + 'px';
+                c.style.height = (vp.height / dpr) + 'px';
+                c.className = 'bg-white shadow-lg shrink-0';
+                items.push({ page, vp, c });
+            }
+            pages.innerHTML = '';
+            items.forEach(it => pages.appendChild(it.c));
+            if (afterLayout) afterLayout();
+            // 2) dibuja cada página
+            for (const it of items) {
+                if (token !== pdfv.token) return;
+                it.c.width = Math.floor(it.vp.width); it.c.height = Math.floor(it.vp.height);
+                await it.page.render({ canvasContext: it.c.getContext('2d'), viewport: it.vp }).promise;
+            }
+        }
+
+        function pdfvStep(f) {
+            pdfv.zoom = Math.min(3, Math.max(0.5, pdfv.zoom * f));
+            renderPdfPages();
+        }
+
+        // Zoom con dos dedos (pellizco) además de los botones + y −
+        (function initPdfPinch() {
+            const sc = document.getElementById('pdfViewerScroll');
+            const pg = document.getElementById('pdfViewerPages');
+            if (!sc || !pg) return;
+            let active = false, d0 = 0, f = 1, ox = 0, oy = 0, pgL0 = 0, pgT0 = 0, mxs = 0, mys = 0;
+            const dist = t => Math.hypot(t[0].clientX - t[1].clientX, t[0].clientY - t[1].clientY);
+            sc.addEventListener('touchstart', e => {
+                if (e.touches.length !== 2 || !pdfv.doc) return;
+                active = true; d0 = dist(e.touches) || 1; f = 1;
+                const scR = sc.getBoundingClientRect(), pgR = pg.getBoundingClientRect();
+                const mx = (e.touches[0].clientX + e.touches[1].clientX) / 2;
+                const my = (e.touches[0].clientY + e.touches[1].clientY) / 2;
+                ox = mx - pgR.left; oy = my - pgR.top;
+                pgL0 = pgR.left - scR.left + sc.scrollLeft; pgT0 = pgR.top - scR.top + sc.scrollTop;
+                mxs = mx - scR.left; mys = my - scR.top;
+                pg.style.transformOrigin = ox + 'px ' + oy + 'px';
+            }, { passive: true });
+            sc.addEventListener('touchmove', e => {
+                if (!active || e.touches.length !== 2) return;
+                if (e.cancelable) e.preventDefault();
+                f = Math.min(3 / pdfv.zoom, Math.max(0.5 / pdfv.zoom, dist(e.touches) / d0));
+                pg.style.transform = 'scale(' + f + ')';
+            }, { passive: false });
+            const end = e => {
+                if (!active || e.touches.length >= 2) return;
+                active = false;
+                if (Math.abs(f - 1) < 0.03) { pg.style.transform = ''; return; }
+                const r = Math.min(3, Math.max(0.5, pdfv.zoom * f)) / pdfv.zoom;
+                pdfv.zoom = pdfv.zoom * r;
+                renderPdfPages(() => {
+                    pg.style.transform = '';
+                    sc.scrollLeft = Math.max(0, pgL0 + ox * r - mxs);
+                    sc.scrollTop = Math.max(0, pgT0 + oy * r - mys);
+                });
+            };
+            sc.addEventListener('touchend', end);
+            sc.addEventListener('touchcancel', end);
+        })();
+
+        function pdfvDownload() { if (pdfv.att) openAttachmentObj(pdfv.att, true); }
+
+        function closePdfViewer() {
+            pdfv.token++;
+            document.getElementById('pdfViewerModal').classList.add('hidden');
+            document.getElementById('pdfViewerPages').innerHTML = '';
+            if (pdfv.doc) { try { pdfv.doc.destroy(); } catch (e) {} }
+            pdfv.doc = null; pdfv.att = null;
+        }
+
+        function openAttachmentObj(att, download = false) {
+            if (!att || !att.data) return;
+            if (!download && typeof pdfjsLib !== 'undefined' && (att.mime === 'application/pdf' || /\.pdf$/i.test(att.name || ''))) { openPdfViewer(att); return; }
+            const blob = dataUrlToBlob(att.data);
+            const url = URL.createObjectURL(blob);
+            const viewable = /^(application\/pdf|text\/|image\/)/.test(blob.type);
+            if (viewable && !download) {
+                const w = window.open(url, '_blank');
+                if (w) { setTimeout(() => URL.revokeObjectURL(url), 120000); return; }
+            }
+            const a = document.createElement('a');
+            a.href = url; a.download = att.name;
+            document.body.appendChild(a); a.click(); a.remove();
+            setTimeout(() => URL.revokeObjectURL(url), 60000);
+        }
+
+        function openAttachment(noteId, attId, download = false) {
+            const note = state.notes.find(n => n.id === noteId);
+            if (!note) return;
+            openAttachmentObj((note.attachments || []).find(a => a.id === attId), download);
+        }
+
+        function openTempAttachment(attId) {
+            openAttachmentObj(tempAttachments.find(a => a.id === attId));
+        }
+
+        function handleDocUpload(e) {
+            const files = Array.from(e.target.files || []);
+            files.forEach(file => {
+                if (file.size > MAX_ATTACH_BYTES) {
+                    alert(`"${file.name}" pesa ${formatSize(file.size)} y supera el máximo de 10 MB.`);
+                    return;
+                }
+                const fr = new FileReader();
+                fr.onload = ev => {
+                    tempAttachments.push({
+                        id: 'a-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7),
+                        name: file.name, mime: file.type || '', size: file.size, data: ev.target.result
+                    });
+                    renderTempAttachments();
+                };
+                fr.readAsDataURL(file);
+            });
+            e.target.value = '';
+        }
+
+        let editingAttId = null;
+
+        function splitFileName(name) {
+            const i = name.lastIndexOf('.');
+            return i > 0 ? [name.slice(0, i), name.slice(i)] : [name, ''];
+        }
+
+        function startRenameAttachment(id) { editingAttId = id; renderTempAttachments(); }
+        function cancelRenameAttachment() { editingAttId = null; renderTempAttachments(); }
+
+        function saveRenameAttachment(id) {
+            const a = tempAttachments.find(x => x.id === id);
+            const inp = document.getElementById('attRenameInput');
+            if (!a || !inp) return;
+            const base = inp.value.trim();
+            if (!base) { alert('El nombre no puede quedar vacío.'); inp.focus(); return; }
+            a.name = base + splitFileName(a.name)[1];
+            editingAttId = null;
+            renderTempAttachments();
+        }
+
+        function renderTempAttachments() {
+            const box = document.getElementById('attachmentPreviewContainer');
+            box.innerHTML = '';
+            tempAttachments.forEach(a => {
+                const [icon, color] = fileIconInfo(a.name, a.mime);
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5';
+                if (a.id === editingAttId) {
+                    const [base, ext] = splitFileName(a.name);
+                    row.innerHTML = `
+                        <i class="fa-solid ${icon} ${color} shrink-0"></i>
+                        <input type="text" id="attRenameInput" value="${escapeHTML(base)}" onkeydown="if(event.key==='Enter'){event.preventDefault();saveRenameAttachment('${a.id}');}else if(event.key==='Escape'){event.stopPropagation();cancelRenameAttachment();}" class="flex-1 min-w-0 bg-slate-900 border border-slate-700 rounded-lg px-2 py-1 text-xs text-slate-100 focus:outline-none focus:border-brand-500">
+                        <span class="text-[10px] text-slate-500 shrink-0">${escapeHTML(ext)}</span>
+                        <button type="button" onclick="saveRenameAttachment('${a.id}')" title="Guardar nombre" class="p-1 text-slate-400 hover:text-emerald-400 text-xs shrink-0"><i class="fa-solid fa-check"></i></button>
+                        <button type="button" onclick="cancelRenameAttachment()" title="Cancelar" class="p-1 text-slate-400 hover:text-slate-200 text-xs shrink-0"><i class="fa-solid fa-xmark"></i></button>`;
+                    box.appendChild(row);
+                    setTimeout(() => { const i = document.getElementById('attRenameInput'); if (i) { i.focus(); i.select(); } }, 0);
+                    return;
+                }
+                row.innerHTML = `
+                    <i class="fa-solid ${icon} ${color} shrink-0"></i>
+                    <button type="button" onclick="openTempAttachment('${a.id}')" class="flex-1 min-w-0 text-left text-xs text-slate-200 hover:text-brand-400 truncate" title="Abrir">${escapeHTML(a.name)}</button>
+                    <span class="text-[10px] text-slate-500 shrink-0">${formatSize(a.size)}</span>
+                    <button type="button" onclick="startRenameAttachment('${a.id}')" title="Cambiar nombre" class="p-1 text-slate-400 hover:text-brand-400 text-xs shrink-0"><i class="fa-solid fa-pen"></i></button>
+                    <button type="button" onclick="removeTempAttachment('${a.id}')" title="Eliminar documento" class="p-1 text-slate-400 hover:text-rose-400 text-xs shrink-0"><i class="fa-solid fa-trash-can"></i></button>`;
+                box.appendChild(row);
+            });
+        }
+
+        function removeTempAttachment(id) {
+            const a = tempAttachments.find(x => x.id === id);
+            if (!a) return;
+            askConfirm('¿Eliminar documento?', `¿Seguro que quieres eliminar el documento "${a.name}" de la nota? Esta acción no se puede deshacer.`, () => {
+                tempAttachments = tempAttachments.filter(x => x.id !== id);
+                if (editingAttId === id) editingAttId = null;
+                renderTempAttachments();
+            });
+        }
+
+        function addTempLink() {
+            const titleEl = document.getElementById('noteLinkTitleInput');
+            const urlEl = document.getElementById('noteLinkUrlInput');
+            const url = normalizeUrl(urlEl.value);
+            if (!url) { alert('Escribe una dirección web válida, por ejemplo https://www.ejemplo.com/manual'); urlEl.focus(); return; }
+            const title = titleEl.value.trim() || new URL(url).hostname.replace(/^www\./, '');
+            const editing = editingLinkId && tempLinks.find(l => l.id === editingLinkId);
+            if (editing) { editing.title = title; editing.url = url; }
+            else tempLinks.push({ id: 'l-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7), title, url });
+            cancelLinkEdit();
+            renderTempLinks();
+        }
+
+        // Editar un enlace ya añadido: sus datos pasan a los campos de arriba
+        let editingLinkId = null;
+
+        function startEditLink(id) {
+            const l = tempLinks.find(x => x.id === id);
+            if (!l) return;
+            editingLinkId = id;
+            document.getElementById('noteLinkTitleInput').value = l.title;
+            document.getElementById('noteLinkUrlInput').value = l.url;
+            document.getElementById('addLinkBtnText').innerText = 'Guardar enlace';
+            document.getElementById('cancelLinkEditBtn').classList.remove('hidden');
+            document.getElementById('cancelLinkEditBtn').classList.add('flex');
+            document.getElementById('noteLinkUrlInput').focus();
+        }
+
+        function cancelLinkEdit() {
+            editingLinkId = null;
+            document.getElementById('noteLinkTitleInput').value = '';
+            document.getElementById('noteLinkUrlInput').value = '';
+            document.getElementById('addLinkBtnText').innerText = 'Añadir';
+            document.getElementById('cancelLinkEditBtn').classList.add('hidden');
+            document.getElementById('cancelLinkEditBtn').classList.remove('flex');
+        }
+
+        function renderTempLinks() {
+            const box = document.getElementById('linkPreviewContainer');
+            box.innerHTML = '';
+            tempLinks.forEach(l => {
+                const row = document.createElement('div');
+                row.className = 'flex items-center gap-2 bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-1.5';
+                const [lIcon, lColor] = linkIconInfo(l.url);
+                row.innerHTML = `
+                    <i class="${lIcon} ${lColor || 'text-sky-400'} shrink-0"></i>
+                    <a href="${escapeHTML(l.url)}" target="_blank" rel="noopener noreferrer" class="flex-1 min-w-0 text-xs text-slate-200 hover:text-brand-400 truncate" title="${escapeHTML(l.url)}">${escapeHTML(l.title)} <span class="text-slate-500">· ${escapeHTML(l.url)}</span></a>
+                    <button type="button" onclick="startEditLink('${l.id}')" title="Editar enlace" class="p-1 text-slate-400 hover:text-brand-400 text-xs shrink-0"><i class="fa-solid fa-pen"></i></button>
+                    <button type="button" onclick="removeTempLink('${l.id}')" title="Eliminar enlace" class="p-1 text-slate-400 hover:text-rose-400 text-xs shrink-0"><i class="fa-solid fa-trash-can"></i></button>`;
+                box.appendChild(row);
+            });
+        }
+
+        function removeTempLink(id) {
+            const l = tempLinks.find(x => x.id === id);
+            if (!l) return;
+            askConfirm('¿Eliminar enlace?', `¿Seguro que quieres eliminar el enlace "${l.title}"? Esta acción no se puede deshacer.`, () => {
+                tempLinks = tempLinks.filter(x => x.id !== id);
+                if (editingLinkId === id) cancelLinkEdit();
+                renderTempLinks();
+            });
+        }
+
+        // LÓGICA DE RECORDATORIOS
+        let editingReminderId = null;
+
+        function getLocalToday() {
+            const d = new Date();
+            return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+        }
+
+        function openReminderModal(reminderId = null) {
+            editingReminderId = reminderId;
+            const r = reminderId ? state.reminders.find(item => item.id === reminderId) : null;
+
+            document.getElementById('reminderModalTitle').innerText = r ? 'Editar Recordatorio' : 'Nuevo Recordatorio';
+            document.getElementById('reminderSaveBtn').innerText = r ? 'Guardar Cambios' : 'Crear Recordatorio';
+            document.getElementById('reminderTitleInput').value = r ? r.title : '';
+            document.getElementById('reminderDateInput').value = r ? (r.dueDate || '') : getLocalToday();
+            document.getElementById('reminderTimeInput').value = r ? (r.time || '') : '';
+            document.getElementById('reminderPriorityInput').value = r ? r.priority : 'media';
+            document.getElementById('reminderGcalInput').checked = false;
+            document.getElementById('reminderRepeatInput').value = r ? (r.repeat || '') : '';
+
+            const noteSelect = document.getElementById('reminderNoteSelect');
+            noteSelect.innerHTML = '<option value="">— Sin nota —</option>';
+            state.notes.forEach(n => {
+                const opt = document.createElement('option');
+                opt.value = n.id;
+                const path = getFolderPathText(n.folderId);
+                opt.textContent = path ? `${n.title} (${path})` : n.title;
+                noteSelect.appendChild(opt);
+            });
+            noteSelect.value = (r && r.noteId && state.notes.some(n => n.id === r.noteId)) ? r.noteId : '';
+
+            document.getElementById('reminderModal').classList.remove('hidden');
+        }
+
+        function saveReminder() {
+            const title = document.getElementById('reminderTitleInput').value.trim();
+            const dueDate = document.getElementById('reminderDateInput').value;
+            const time = document.getElementById('reminderTimeInput').value;
+            const priority = document.getElementById('reminderPriorityInput').value;
+            const addToGoogle = document.getElementById('reminderGcalInput').checked;
+            const repeat = document.getElementById('reminderRepeatInput').value;
+
+            if (!title) return;
+            if (addToGoogle && !dueDate) {
+                alert('Para añadirlo a Google Calendar necesitas indicar una fecha.');
+                return;
+            }
+
+            let reminder = editingReminderId ? state.reminders.find(item => item.id === editingReminderId) : null;
+            if (reminder) {
+                // Si cambia la fecha u hora, el evento ya creado en Google deja de coincidir
+                if (reminder.dueDate !== dueDate || (reminder.time || '') !== time) reminder.gcalAdded = false;
+                reminder.title = title;
+                reminder.dueDate = dueDate;
+                reminder.time = time;
+                reminder.priority = priority;
+            } else {
+                reminder = {
+                    id: 'r-' + Date.now(),
+                    title: title,
+                    dueDate: dueDate,
+                    time: time,
+                    priority: priority,
+                    completed: false
+                };
+                state.reminders.push(reminder);
+            }
+
+            if (repeat && dueDate) reminder.repeat = repeat; else delete reminder.repeat;
+            const linkedNoteId = document.getElementById('reminderNoteSelect').value;
+            if (linkedNoteId) reminder.noteId = linkedNoteId;
+            else delete reminder.noteId;
+
+            saveStateToStorage();
+            closeModal('reminderModal');
+            renderReminders();
+            editingReminderId = null;
+
+            if (addToGoogle) addReminderToGoogleCalendar(reminder.id);
+        }
+
+        // ENLACE CON GOOGLE CALENDAR
+        function buildGoogleCalendarUrl(r) {
+            const pad = n => String(n).padStart(2, '0');
+            const ymd = d => `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}`;
+            const [y, m, d] = r.dueDate.split('-').map(Number);
+            let dates;
+            if (r.time) {
+                const [hh, mm] = r.time.split(':').map(Number);
+                const start = new Date(y, m - 1, d, hh, mm);
+                const end = new Date(start.getTime() + 3600000);
+                const fmt = x => `${ymd(x)}T${pad(x.getHours())}${pad(x.getMinutes())}00`;
+                dates = `${fmt(start)}/${fmt(end)}`;
+            } else {
+                dates = `${ymd(new Date(y, m - 1, d))}/${ymd(new Date(y, m - 1, d + 1))}`;
+            }
+            const details = `Prioridad: ${r.priority} (WorkNotes)`;
+            const tz = Intl.DateTimeFormat().resolvedOptions().timeZone || '';
+            return `https://calendar.google.com/calendar/render?action=TEMPLATE&text=${encodeURIComponent(r.title)}&dates=${dates}&details=${encodeURIComponent(details)}${tz ? '&ctz=' + encodeURIComponent(tz) : ''}`;
+        }
+
+        function addReminderToGoogleCalendar(id) {
+            const r = state.reminders.find(item => item.id === id);
+            if (!r) return;
+            if (!r.dueDate) {
+                alert('Este recordatorio no tiene fecha. Edítalo para poder añadirlo a Google Calendar.');
+                return;
+            }
+            window.open(buildGoogleCalendarUrl(r), '_blank', 'noopener');
+            r.gcalAdded = true;
+            saveStateToStorage();
+            renderReminders();
+        }
+
+        function toggleReminder(id) {
+            const r = state.reminders.find(item => item.id === id);
+            if (r) {
+                r.completed = !r.completed;
+                // Si se repite, al completarlo se crea el siguiente
+                if (r.completed && r.repeat && r.dueDate) {
+                    const next = { ...r, id: 'r-' + Date.now(), dueDate: nextReminderDate(r.dueDate, r.repeat), completed: false, gcalAdded: false };
+                    delete next._m; delete next._h;
+                    state.reminders.push(next);
+                    r.repeat = '';
+                    delete r.repeat;
+                }
+                saveStateToStorage();
+                renderReminders();
+            }
+        }
+
+        function deleteReminder(id) {
+            const reminder = state.reminders.find(r => r.id === id);
+            if (!reminder) return;
+            askConfirm('¿Eliminar recordatorio?', `¿Seguro que quieres eliminar el recordatorio "${reminder.title}"? Esta acción no se puede deshacer.`, () => {
+                state.reminders = state.reminders.filter(r => r.id !== id);
+                saveStateToStorage();
+                renderReminders();
+            });
+        }
+
+        // COPIAS DE SEGURIDAD (EXPORT / IMPORT JSON)
+        function exportDataJSON() {
+            const dataStr = "data:text/json;charset=utf-8," + encodeURIComponent(JSON.stringify(state, null, 2));
+            const downloadAnchor = document.createElement('a');
+            downloadAnchor.setAttribute("href", dataStr);
+            downloadAnchor.setAttribute("download", `WorkNotes_Backup_${new Date().toISOString().split('T')[0]}.json`);
+            document.body.appendChild(downloadAnchor);
+            downloadAnchor.click();
+            downloadAnchor.remove();
+        }
+
+        function importDataJSON(event) {
+            const file = event.target.files[0];
+            if (!file) return;
+
+            const reader = new FileReader();
+            reader.onload = function(e) {
+                try {
+                    const importedState = JSON.parse(e.target.result);
+                    if (importedState.folders && importedState.notes) {
+                        askConfirm('¿Importar copia de seguridad?', 'Se reemplazarán todas las secciones, notas y recordatorios actuales por los de esta copia. Si no tienes una copia reciente de lo actual, expórtala antes.', () => {
+                            state = importedState;
+                            saveStateToStorage();
+                            renderFolderTree();
+                            renderCurrentFolderView();
+                            renderNotes();
+                            renderReminders();
+                            closeModal('settingsModal');
+                            alert('¡Datos e imágenes importados con éxito!');
+                        }, 'Sí, importar');
+                    } else {
+                        alert('El archivo JSON no tiene la estructura correcta.');
+                    }
+                } catch (err) {
+                    alert('Error al procesar el archivo JSON.');
+                }
+            };
+            reader.readAsText(file);
+            event.target.value = '';
+        }
+
+        // MODALES GENERALES
+        function openSettingsModal() {
+            document.getElementById('settingsModal').classList.remove('hidden');
+        }
+
+        function openSyncModal() {
+            document.getElementById('gClientIdInput').value = GSYNC.clientId;
+            document.getElementById('syncModal').classList.remove('hidden');
+            updateStorageInfo();
+        }
+
+        function closeModal(id) {
+            document.getElementById(id).classList.add('hidden');
+        }
+
+        // VISOR DE IMÁGENES CON ZOOM (pellizco, arrastre, doble toque, rueda y botones)
+        const IMGV = { s: 1, tx: 0, ty: 0, pointers: new Map(), multi: false, moved: false, downAt: 0, downX: 0, downY: 0, downTarget: null, lastTap: 0, lastTapX: 0, lastTapY: 0, pinchDist: 0, lastMid: null, hintTimer: null };
+
+        function imgvApply() {
+            const box = document.getElementById('imageViewerModal');
+            const img = document.getElementById('fullImageView');
+            const maxX = Math.max(0, (img.clientWidth * IMGV.s - box.clientWidth) / 2);
+            const maxY = Math.max(0, (img.clientHeight * IMGV.s - box.clientHeight) / 2);
+            IMGV.tx = Math.min(maxX, Math.max(-maxX, IMGV.tx));
+            IMGV.ty = Math.min(maxY, Math.max(-maxY, IMGV.ty));
+            if (IMGV.s <= 1) { IMGV.tx = 0; IMGV.ty = 0; }
+            img.style.transform = `translate(${IMGV.tx}px, ${IMGV.ty}px) scale(${IMGV.s})`;
+            document.getElementById('imageZoomLabel').innerText = Math.round(IMGV.s * 100) + '%';
+        }
+
+        // Zoom manteniendo fijo el punto (px, py), medido desde el centro de la pantalla
+        function imgvZoomAt(newS, px, py) {
+            newS = Math.min(8, Math.max(1, newS));
+            const k = newS / IMGV.s;
+            IMGV.tx = px - (px - IMGV.tx) * k;
+            IMGV.ty = py - (py - IMGV.ty) * k;
+            IMGV.s = newS;
+            imgvApply();
+        }
+
+        function imgvStep(f) { imgvZoomAt(IMGV.s * f, 0, 0); }
+        function imgvReset() { IMGV.s = 1; IMGV.tx = 0; IMGV.ty = 0; imgvApply(); }
+
+        function imgvOpenTab() {
+            const src = document.getElementById('fullImageView').src;
+            if (!src) return;
+            if (src.startsWith('data:')) {
+                const url = URL.createObjectURL(dataUrlToBlob(src));
+                const w = window.open(url, '_blank');
+                if (!w) { alert('El navegador ha bloqueado la nueva pestaña. Permite las ventanas emergentes para este archivo.'); }
+                setTimeout(() => URL.revokeObjectURL(url), 120000);
+            } else {
+                window.open(src, '_blank');
+            }
+        }
+
+        function openImageViewer(src) {
+            document.getElementById('fullImageView').src = src;
+            IMGV.pointers.clear();
+            imgvReset();
+            document.getElementById('imageViewerModal').classList.remove('hidden');
+            const hint = document.getElementById('imageViewerHint');
+            hint.style.opacity = '1';
+            clearTimeout(IMGV.hintTimer);
+            IMGV.hintTimer = setTimeout(() => { hint.style.opacity = '0'; }, 3500);
+        }
+
+        function closeImageViewer() {
+            document.getElementById('imageViewerModal').classList.add('hidden');
+            IMGV.pointers.clear();
+            clearTimeout(IMGV.hintTimer);
+            imgvReset();
+        }
+
+        (function initImageViewer() {
+            const box = document.getElementById('imageViewerModal');
+            const img = document.getElementById('fullImageView');
+            const center = (cx, cy) => {
+                const r = box.getBoundingClientRect();
+                return { x: cx - r.left - r.width / 2, y: cy - r.top - r.height / 2 };
+            };
+
+            box.addEventListener('pointerdown', e => {
+                if (e.target.closest('[data-viewer-ui]')) return;
+                IMGV.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                if (IMGV.pointers.size === 1) {
+                    IMGV.multi = false; IMGV.moved = false;
+                    IMGV.downAt = Date.now(); IMGV.downX = e.clientX; IMGV.downY = e.clientY; IMGV.downTarget = e.target;
+                } else if (IMGV.pointers.size === 2) {
+                    IMGV.multi = true;
+                    const [a, b] = [...IMGV.pointers.values()];
+                    IMGV.pinchDist = Math.hypot(a.x - b.x, a.y - b.y);
+                    IMGV.lastMid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+                }
+            });
+
+            box.addEventListener('pointermove', e => {
+                const prev = IMGV.pointers.get(e.pointerId);
+                if (!prev) return;
+                IMGV.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+                if (Math.hypot(e.clientX - IMGV.downX, e.clientY - IMGV.downY) > 8) IMGV.moved = true;
+                if (IMGV.pointers.size === 2) {
+                    const [a, b] = [...IMGV.pointers.values()];
+                    const dist = Math.hypot(a.x - b.x, a.y - b.y);
+                    const mid = { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
+                    const c = center(mid.x, mid.y);
+                    if (IMGV.pinchDist > 0) imgvZoomAt(IMGV.s * dist / IMGV.pinchDist, c.x, c.y);
+                    IMGV.tx += mid.x - IMGV.lastMid.x;
+                    IMGV.ty += mid.y - IMGV.lastMid.y;
+                    imgvApply();
+                    IMGV.pinchDist = dist; IMGV.lastMid = mid;
+                } else if (IMGV.pointers.size === 1 && IMGV.s > 1) {
+                    IMGV.tx += e.clientX - prev.x;
+                    IMGV.ty += e.clientY - prev.y;
+                    imgvApply();
+                }
+            });
+
+            const endPointer = e => {
+                if (!IMGV.pointers.has(e.pointerId)) return;
+                IMGV.pointers.delete(e.pointerId);
+                if (IMGV.pointers.size > 0 || e.type === 'pointercancel') return;
+                const now = Date.now();
+                const isTap = !IMGV.moved && !IMGV.multi && now - IMGV.downAt < 350;
+                if (!isTap) return;
+                if (IMGV.downTarget === img) {
+                    // Doble toque / doble clic sobre la imagen: acercar o volver al tamaño original
+                    const near = Math.hypot(e.clientX - IMGV.lastTapX, e.clientY - IMGV.lastTapY) < 40;
+                    if (now - IMGV.lastTap < 320 && near) {
+                        if (IMGV.s > 1) imgvReset();
+                        else { const c = center(e.clientX, e.clientY); imgvZoomAt(2.5, c.x, c.y); }
+                        IMGV.lastTap = 0;
+                    } else {
+                        IMGV.lastTap = now; IMGV.lastTapX = e.clientX; IMGV.lastTapY = e.clientY;
+                    }
+                } else if (IMGV.s > 1) {
+                    imgvReset();
+                } else {
+                    closeImageViewer();
+                }
+            };
+            box.addEventListener('pointerup', endPointer);
+            box.addEventListener('pointercancel', endPointer);
+
+            box.addEventListener('wheel', e => {
+                e.preventDefault();
+                const c = center(e.clientX, e.clientY);
+                imgvZoomAt(IMGV.s * (e.deltaY < 0 ? 1.15 : 1 / 1.15), c.x, c.y);
+            }, { passive: false });
+
+            window.addEventListener('resize', () => { if (!box.classList.contains('hidden')) imgvApply(); });
+        })();
+
+        function forceSync() {
+            if (!GSYNC.connected) { alert('Primero conecta con Google Drive.'); return; }
+            GSYNC.pendingUpload = true;
+            syncNow(true);
+        }
+
+        function updateStatsCounters() {
+            document.getElementById('folderCountText').innerText = `${state.folders.length} Secciones`;
+            document.getElementById('noteCountText').innerText = `${state.notes.length} Notas`;
+        }
+
+        function escapeHTML(str) {
+            if (!str) return '';
+            return str.replace(/[&<>'"]/g, 
+                tag => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', "'": '&#39;', '"': '&quot;' }[tag] || tag)
+            );
+        }
+    </script>
+</body>
+</html>
